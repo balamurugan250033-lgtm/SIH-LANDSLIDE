@@ -1,0 +1,30 @@
+{
+  "expo": {
+    "name": "Landslide Sentinel",
+    "slug": "landslide-sentinel",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "package": "com.anonymous.landslidesentinel",
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyCeT7H0atQY2VTrIlVBsIA08adrMr5cgDY"
+        }
+      }
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    }
+  }
+}

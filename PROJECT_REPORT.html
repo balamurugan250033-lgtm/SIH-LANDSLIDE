@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NER Landslide Early Warning System — Project Report</title>
+<style>
+  @page { size: A4; margin: 2cm; }
+  body { font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; color: #1f2937; margin: 0; padding: 0; }
+  .page { page-break-after: always; }
+  .page:last-child { page-break-after: auto; }
+  h1 { font-size: 26px; color: #0f172a; border-bottom: 3px solid #2563eb; padding-bottom: 8px; margin-top: 0; }
+  h2 { font-size: 20px; color: #1e3a8a; margin-top: 28px; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px; }
+  h3 { font-size: 16px; color: #334155; margin-top: 20px; }
+  p { margin: 8px 0; text-align: justify; }
+  ul, ol { margin: 8px 0; padding-left: 24px; }
+  li { margin-bottom: 4px; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13px; }
+  th, td { border: 1px solid #cbd5e1; padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: #f1f5f9; font-weight: 600; }
+  code { background: #f8fafc; padding: 2px 6px; border-radius: 4px; font-size: 13px; color: #dc2626; }
+  .badge { display: inline-block; padding: 3px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+  .badge-blue { background: #dbeafe; color: #1e40af; }
+  .badge-green { background: #dcfce7; color: #166534; }
+  .badge-red { background: #fee2e2; color: #991b1b; }
+  .cover { text-align: center; padding-top: 120px; }
+  .cover h1 { font-size: 32px; border: none; }
+  .cover p { font-size: 16px; color: #64748b; }
+  .two-col { display: flex; gap: 24px; }
+  .two-col > div { flex: 1; }
+  @media print { .page { page-break-after: always; } }
+</style>
+</head>
+<body>
+
+<div class="page cover">
+  <h1>NER Landslide Early Warning System</h1>
+  <p style="font-size: 18px; color: #475569; margin-top: 12px;">Smart India Hackathon 2026 — Project Report</p>
+  <p style="margin-top: 60px; color: #94a3b8;">Government of India · National Disaster Management Authority</p>
+</div>
+
+<div class="page">
+  <h1>1. Executive Summary</h1>
+  <p>The <strong>NER Landslide Early Warning System</strong> is a comprehensive, multi-platform disaster management solution designed for the North-Eastern Region (NER) of India. It integrates real-time ML-based risk assessment, citizen reporting, official alert dispatch, offline-first mobile capabilities, and peer-to-peer mesh alert relay to ensure timely warnings even when internet connectivity is unavailable.</p>
+  <p>The system comprises three main interfaces: a <strong>Citizen Web Portal</strong>, an <strong>Admin Web Dashboard</strong>, and a <strong>Citizen Mobile App</strong>, all backed by a unified FastAPI backend with SQLite persistence.</p>
+
+  <h2>Key Highlights</h2>
+  <ul>
+    <li><strong>4-Tier Risk Classification:</strong> Low, Moderate, High, Severe with distinct visual coding</li>
+    <li><strong>Offline-First Mobile:</strong> Local SQLite cache, queued reports, auto-sync on reconnect</li>
+    <li><strong>Mesh Alert Relay:</strong> Bluetooth/WiFi peer-to-peer alert propagation using Google Nearby Connections API</li>
+    <li><strong>Real-Time GIS Mapping:</strong> Leaflet-based web map + native Android maps with risk-colored markers</li>
+    <li><strong>Admin Alert Dispatch:</strong> Create, preview, and broadcast warnings across web, SMS, and push channels</li>
+    <li><strong>Road & Connectivity Status:</strong> Live corridor status with alternative route recommendations</li>
+  </ul>
+</div>
+
+<div class="page">
+  <h1>2. System Architecture</h1>
+  <h2>2.1 High-Level Architecture</h2>
+  <table>
+    <tr><th>Layer</th><th>Technology</th><th>Purpose</th></tr>
+    <tr><td><span class="badge badge-blue">Frontend</span></td><td>React.js, React Router, Leaflet, Lucide Icons</td><td>Citizen Web Portal & Admin Dashboard</td></tr>
+    <tr><td><span class="badge badge-green">Mobile</span></td><td>React Native (Expo), react-native-maps, expo-image-picker, expo-location</td><td>Citizen mobile app with offline support</td></tr>
+    <tr><td><span class="badge badge-blue">Backend</span></td><td>FastAPI, Uvicorn, SQLite, SQLAlchemy</td><td>REST API, ML inference, alert decision engine</td></tr>
+    <tr><td><span class="badge badge-red">Native Android</span></td><td>Kotlin, Google Nearby Connections, CMake</td><td>Mesh relay native module for bare APK</td></tr>
+  </table>
+
+  <h2>2.2 Data Flow</h2>
+  <ol>
+    <li><strong>Data Ingestion:</strong> Simulated sensor feeds (rainfall, soil moisture, slope angle) feed into the backend every 60 seconds</li>
+    <li><strong>ML Inference:</strong> Random Forest classifier computes landslide probability score</li>
+    <li><strong>Decision Engine:</strong> Maps probability to 4-tier risk level with explainable reasoning</li>
+    <li><strong>Alert Dispatch:</strong> Admin triggers notifications via web/SMS/push; alerts persist in database</li>
+    <li><strong>Citizen Consumption:</strong> Web portals and mobile app poll REST API for live risk status</li>
+    <li><strong>Mesh Relay:</strong> When offline, phones broadcast cached alerts via Nearby Connections; unseen messages are cached, displayed with “Received via mesh” tag, and rebroadcast with decrementing TTL</li>
+    <li><strong>Backend Re-ingestion:</strong> Phones with internet POST mesh-captured alerts back to backend for normalization</li>
+  </ol>
+</div>
+
+<div class="page">
+  <h1>3. Backend API</h1>
+  <h2>3.1 Base URL</h2>
+  <p><code>http://localhost:8000/api/v1</code></p>
+
+  <h2>3.2 Core Endpoints</h2>
+  <table>
+    <tr><th>Method</th><th>Endpoint</th><th>Access</th><th>Description</th></tr>
+    <tr><td>GET</td><td>/regions</td><td>Public</td><td>List monitored NER regions</td></tr>
+    <tr><td>GET</td><td>/citizen/risk?region_id={id}</td><td>Public</td><td>Current ML risk score, tier, observation</td></tr>
+    <tr><td>GET</td><td>/citizen/alerts?region_id={id}</td><td>Public</td><td>Active alerts from decision engine</td></tr>
+    <tr><td>POST</td><td>/citizen/reports</td><td>Public</td><td>Submit citizen hazard report</td></tr>
+    <tr><td>GET</td><td>/citizen/road-statuses</td><td>Public</td><td>Road/connectivity status</td></tr>
+    <tr><td>GET</td><td>/citizen/notifications</td><td>Public</td><td>Sent official notifications</td></tr>
+    <tr><td>POST</td><td>/auth/login</td><td>Public</td><td>Admin authentication (JWT)</td></tr>
+    <tr><td>POST</td><td>/admin/notifications</td><td>Admin</td><td>Create alert draft</td></tr>
+    <tr><td>POST</td><td>/admin/notifications/{id}/send</td><td>Admin</td><td>Dispatch alert</td></tr>
+    <tr><td>POST</td><td>/admin/road-statuses</td><td>Admin</td><td>Create/update road status</td></tr>
+    <tr><td>GET</td><td>/admin/road-statuses</td><td>Admin</td><td>List all road statuses</td></tr>
+    <tr><td>GET</td><td>/admin/notifications</td><td>Admin</td><td>List all notifications</td></tr>
+    <tr><td>GET</td><td>/health</td><td>Public</td><td>Data source health check</td></tr>
+  </table>
+
+  <h2>3.3 Database Models</h2>
+  <ul>
+    <li><strong>Region:</strong> id, name, latitude, longitude</li>
+    <li><strong>SensorData:</strong> region_id, rainfall_mm, soil_moisture_percent, slope_angle, timestamp</li>
+    <li><strong>CitizenReport:</strong> region_id, hazard_type, description, latitude, longitude, status, timestamp</li>
+    <li><strong>Notification:</strong> region_id, risk_level, title, message, language, channel, status, sent_at, created_by</li>
+    <li><strong>RoadStatus:</strong> region_id, road_name, status, reason, alternative_route, updated_at</li>
+  </ul>
+</div>
+
+<div class="page">
+  <h1>4. Web Applications</h1>
+  <h2>4.1 Citizen Web Portal</h2>
+  <p><strong>URL:</strong> <code>http://localhost:5173</code></p>
+  <ul>
+    <li>Sticky header with branded nav and mobile hamburger menu</li>
+    <li>Hero stats: Monitored Zones, Active Alerts, Your Region Risk, Reports Today</li>
+    <li>Interactive region cards with risk badges, live metrics (rain, soil, slope)</li>
+    <li>Risk Assessment panel with animated progress meters</li>
+    <li>Hazard Report form with type selector chips, description, photo upload, lat/long inputs</li>
+    <li>Alerts feed with color-coded cards and timestamps</li>
+    <li>Official Notifications panel with mesh relay tags</li>
+    <li>Road & Connectivity Status panel</li>
+    <li>Safety Guidelines section</li>
+  </ul>
+
+  <h2>4.2 Admin Web Dashboard</h2>
+  <p><strong>URL:</strong> <code>http://localhost:5174</code></p>
+  <ul>
+    <li>Login screen with JWT auth (default: <code>admin_test</code> / <code>admin_password</code>)</li>
+    <li>Sidebar navigation: Overview, Regions & GIS, Alerts, Reports</li>
+    <li>Leaflet GIS map above the regions table with risk-colored markers</li>
+    <li>4-tier risk badges: Low (green), Moderate (amber), High (orange), Severe (dark red)</li>
+    <li>Data source indicators per row: rainfall, soil moisture, satellite (live/stale dots)</li>
+    <li>Real-time timestamps: “Updated 2 min ago”</li>
+    <li>Road Status column: Open / At-risk / Blocked with alternative routes</li>
+    <li>Pending Reports count per region</li>
+    <li>“Issue Alert” action per row: opens modal with tier, language, channel selector</li>
+    <li>System health badge: Healthy (green) / Degraded (amber)</li>
+  </ul>
+</div>
+
+<div class="page">
+  <h1>5. Mobile Application</h1>
+  <h2>5.1 Technology Stack</h2>
+  <table>
+    <tr><th>Component</th><th>Technology</th></tr>
+    <tr><td>Framework</td><td>React Native (Expo SDK 57)</td></tr>
+    <tr><td>Navigation</td><td>Custom tab bar with 7 tabs</td></tr>
+    <tr><td>Maps</td><td>react-native-maps (native Android) + fallback web panel</td></tr>
+    <tr><td>Offline Storage</td><td>@react-native-async-storage/async-storage + expo-sqlite</td></tr>
+    <tr><td>Camera</td><td>expo-image-picker</td></tr>
+    <tr><td>Location</td><td>expo-location</td></tr>
+    <tr><td>Mesh Relay</td><td>Google Nearby Connections API (native Kotlin module)</td></tr>
+    <tr><td>Push Notifications</td><td>expo-notifications (skipped in dev builds without FCM)</td></tr>
+  </table>
+
+  <h2>5.2 App Screens</h2>
+  <ol>
+    <li><strong>Dashboard:</strong> Region cards with risk status, search, pull-to-refresh, offline cache indicator</li>
+    <li><strong>GIS Map:</strong> Native map with colored markers + fallback region list if tiles unavailable</li>
+    <li><strong>Alerts:</strong> Searchable alert feed with mesh relay tags</li>
+    <li><strong>Notifications:</strong> Official notices + mesh-received alerts with live polling</li>
+    <li><strong>Road Status:</strong> Live corridor status with alternative routes</li>
+    <li><strong>Evacuation Routes:</strong> Safe routes list + GPS-based nearest-route finder</li>
+    <li><strong>Report:</strong> Hazard type selector, description, camera capture, gallery picker, auto-geotag, offline queuing</li>
+    <li><strong>Profile:</strong> Language, notifications, sound, vibration, alert threshold, auto-sync toggle</li>
+  </ol>
+
+  <h2>5.3 Offline-First Architecture</h2>
+  <ul>
+    <li>All API responses cached in AsyncStorage with timestamps</li>
+    <li>Reports submitted offline are queued locally and auto-synced when connectivity returns</li>
+    <li>Mesh alerts cached with seen-ID deduplication and TTL-based rebroadcast</li>
+    <li>Network status indicator in header (green = online, red = offline)</li>
+  </ul>
+</div>
+
+<div class="page">
+  <h1>6. Mesh Networking</h1>
+  <h2>6.1 Protocol</h2>
+  <p>The mobile app implements an offline emergency-alert relay using <strong>Google Nearby Connections API</strong>. Message format:</p>
+  <table>
+    <tr><th>Field</th><th>Type</th><th>Description</th></tr>
+    <tr><td><code>zone_code</code></td><td>String</td><td>Affected region name</td></tr>
+    <tr><td><code>risk_tier</code></td><td>String</td><td>LOW / MODERATE / HIGH / CRITICAL / SEVERE</td></tr>
+    <tr><td><code>timestamp</code></td><td>String</td><td>ISO 8601 alert timestamp</td></tr>
+    <tr><td><code>ttl</code></td><td>Integer</td><td>Hop count, starts at 5, decremented per relay</td></tr>
+    <tr><td><code>msg_id</code></td><td>String</td><td>Unique message ID for deduplication</td></tr>
+    <tr><td><code>short_text</code></td><td>String</td><td>Brief warning description</td></tr>
+  </table>
+
+  <h2>6.2 Behavior</h2>
+  <ul>
+    <li>Each phone maintains a local seen-cache of <code>msg_id</code> to avoid rebroadcast loops</li>
+    <li>When offline, phone periodically broadcasts cached alert set via Nearby Connections discovery/advertising</li>
+    <li>Nearby phones pick up new unseen messages, cache them, display with “Received via mesh” tag</li>
+    <li>If <code>ttl &gt; 0</code>, the message is rebroadcast with decremented TTL</li>
+    <li>When a phone with internet receives a mesh message, it POSTs to the backend to re-enter the normal alert pipeline</li>
+    <li>Alert list UI updates live via React Native state listener — no manual refresh needed</li>
+  </ul>
+
+  <h2>6.3 Native Implementation</h2>
+  <p>The mesh relay is implemented as a bare Android native module:</p>
+  <ul>
+    <li><strong>Kotlin Module:</strong> <code>NearbyConnectionsModule.kt</code> wraps Google Nearby Connections with <code>@ReactMethod</code> annotations</li>
+    <li><strong>JS Bridge:</strong> <code>mesh.js</code> provides <code>startAdvertising()</code>, <code>startDiscovery()</code>, <code>sendMessage()</code>, and event listeners via <code>DeviceEventEmitter</code></li>
+    <li><strong>Package Registration:</strong> <code>NearbyConnectionsPackage.kt</code> registers the module with React Native</li>
+  </ul>
+</div>
+
+<div class="page">
+  <h1>7. Admin Features</h1>
+  <h2>7.1 Alert Dispatch Workflow</h2>
+  <ol>
+    <li>Admin opens <strong>Regions & GIS</strong> tab</li>
+    <li>Clicks <strong>Issue Alert</strong> for a specific region</li>
+    <li>Selects risk tier, enters title and message</li>
+    <li>Chooses language (English, Hindi, Assamese, Bengali, Manipuri, Khasi, Mizo, Nagamese)</li>
+    <li>Selects channel: Web Portal, SMS, Push Notification, or All Channels</li>
+    <li>Clicks <strong>Dispatch Alert</strong> — notification is created with status “sent”</li>
+    <li>Citizens see the alert in their web portal, mobile notifications tab, or via mesh relay</li>
+  </ol>
+
+  <h2>7.2 Road Status Management</h2>
+  <ul>
+    <li>Admin can create/update road status for any region</li>
+    <li>Status options: <span class="badge badge-green">Open</span> / <span class="badge badge-red">At-risk</span> / <span class="badge badge-red">Blocked</span></li>
+    <li>Can add reason and alternative route</li>
+    <li>Citizens see road status in both web and mobile apps</li>
+  </ul>
+
+  <h2>7.3 Live Monitoring</h2>
+  <ul>
+    <li>System health badge updates every 30 seconds</li>
+    <li>Risk summary cards show count of Severe/Critical/High/Moderate zones</li>
+    <li>Pending reports count per region links directly to Reports tab</li>
+  </ul>
+</div>
+
+<div class="page">
+  <h1>8. Deployment & Testing</h1>
+  <h2>8.1 Running the Backend</h2>
+  <pre style="background:#f8fafc;padding:12px;border-radius:8px;font-size:13px;"><code>cd C:\Users\vbala\Downloads\SIH LANSLIDE\SIH LANSLIDE\backend
+.\venv\Scripts\uvicorn.exe app.main:app --host 0.0.0.0 --port 8000</code></pre>
+  <p>Backend runs at <code>http://localhost:8000</code>. API docs at <code>http://localhost:8000/docs</code>.</p>
+
+  <h2>8.2 Running the Web Apps</h2>
+  <pre style="background:#f8fafc;padding:12px;border-radius:8px;font-size:13px;"><code># Citizen Web
+cd C:\Users\vbala\Downloads\SIH LANSLIDE\SIH LANSLIDE\web-citizen
+npx vite --host 0.0.0.0 --port 5173
+
+# Admin Web
+cd C:\Users\vbala\Downloads\SIH LANSLIDE\SIH LANSLIDE\web-admin
+npx vite --host 0.0.0.0 --port 5174</code></pre>
+
+  <h2>8.3 Building the Mobile APK</h2>
+  <pre style="background:#f8fafc;padding:12px;border-radius:8px;font-size:13px;"><code>cd C:\Users\vbala\Downloads\SIH LANSLIDE\SIH LANSLIDE\mobile\android
+.\gradlew.bat assembleDebug</code></pre>
+  <p>APK output: <code>android/app/build/outputs/apk/debug/app-debug.apk</code></p>
+  <p>Install: <code>adb install -r app-debug.apk</code></p>
+
+  <h2>8.4 Mesh Testing on Physical Devices</h2>
+  <ol>
+    <li>Install APK on two Android devices</li>
+    <li>Enable Airplane Mode + Bluetooth/WiFi on both</li>
+    <li>Open app on both, keep in foreground</li>
+    <li>Bring devices within 5–10 meters</li>
+    <li>Alerts transfer with “Received via mesh” tag within seconds</li>
+    <li>When internet returns, mesh alerts auto-POST to backend</li>
+  </ol>
+</div>
+
+<div class="page">
+  <h1>9. Technology Summary</h1>
+  <table>
+    <tr><th>Category</th><th>Technologies</th></tr>
+    <tr><td>Backend</td><td>Python, FastAPI, SQLAlchemy, SQLite, Uvicorn, PyJWT, scikit-learn</td></tr>
+    <tr><td>Web Frontend</td><td>React 18, React Router, Axios, Leaflet, Lucide React, Vite</td></tr>
+    <tr><td>Mobile</td><td>React Native, Expo SDK 57, Expo Router, react-native-maps, expo-image-picker, expo-location, expo-sqlite, expo-notifications</td></tr>
+    <tr><td>Native Android</td><td>Kotlin, Google Play Services Nearby, CMake, Gradle</td></tr>
+    <tr><td>DevOps</td><td>Gradle 9.3.1, Android SDK 36, OpenJDK 21, Node.js/npm</td></tr>
+  </table>
+
+  <h2>9.1 Default Credentials</h2>
+  <ul>
+    <li><strong>Admin:</strong> <code>admin_test</code> / <code>admin_password</code></li>
+    <li><strong>Backend API:</strong> <code>http://localhost:8000/api/v1</code></li>
+    <li><strong>Citizen Web:</strong> <code>http://localhost:5173</code></li>
+    <li><strong>Admin Web:</strong> <code>http://localhost:5174</code></li>
+  </ul>
+
+  <h2>9.2 Monitored Regions</h2>
+  <table>
+    <tr><th>#</th><th>Region</th><th>Latitude</th><th>Longitude</th></tr>
+    <tr><td>1</td><td>Kohima, Nagaland</td><td>25.6586</td><td>94.1093</td></tr>
+    <tr><td>2</td><td>Shillong, Meghalaya</td><td>25.5683</td><td>91.8762</td></tr>
+    <tr><td>3</td><td>Aizawl, Mizoram</td><td>23.7271</td><td>92.7176</td></tr>
+    <tr><td>4</td><td>Itanagar, Arunachal Pradesh</td><td>27.0844</td><td>93.6053</td></tr>
+    <tr><td>5</td><td>Imphal, Manipur</td><td>24.8170</td><td>93.9368</td></tr>
+    <tr><td>6</td><td>Dimapur, Nagaland</td><td>25.9092</td><td>93.7266</td></tr>
+    <tr><td>7</td><td>Gangtok, Sikkim</td><td>27.3389</td><td>88.6065</td></tr>
+    <tr><td>8</td><td>NH-2 Assam Corridor</td><td>26.1445</td><td>91.7362</td></tr>
+    <tr><td>9</td><td>East Khasi Hills, Meghalaya</td><td>25.4646</td><td>91.7835</td></tr>
+  </table>
+</div>
+
+<div class="page">
+  <h1>10. Conclusion</h1>
+  <p>The NER Landslide Early Warning System demonstrates a production-ready architecture for disaster early warning in low-connectivity environments. By combining cloud-based ML inference, real-time web dashboards, offline-first mobile apps, and peer-to-peer mesh networking, the system ensures that critical landslide warnings reach citizens and administrators even when traditional internet infrastructure fails.</p>
+  <p>The modular design allows independent scaling of the backend, web portals, and mobile application, while the native Android mesh module provides a robust foundation for offline alert propagation that can be extended to additional disaster scenarios.</p>
+
+  <h2>Future Enhancements</h2>
+  <ul>
+    <li>Integration with real IoT sensor networks and satellite data APIs</li>
+    <li>SMS gateway integration using Twilio for rural alert delivery</li>
+    <li>Multilingual voice alerts via IVR for low-literacy users</li>
+    <li>Drone-based post-disaster assessment integration</li>
+    <li>Community volunteer coordination module</li>
+    <li>Predictive evacuation route optimization using graph algorithms</li>
+  </ul>
+
+  <p style="margin-top: 40px; color: #64748b; font-size: 14px;">Report generated for Smart India Hackathon 2026 — NER Landslide Early Warning System</p>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,15 @@
+fastapi
+uvicorn
+sqlalchemy
+pydantic
+pydantic-settings
+xgboost
+pandas
+scikit-learn
+requests
+python-dotenv
+pyjwt
+bcrypt
+pytest
+httpx2
+twilio

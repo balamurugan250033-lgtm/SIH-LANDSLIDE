@@ -1,0 +1,36 @@
+# Node.js dependencies
+node_modules/
+mobile/node_modules/
+mobile/.expo/
+mobile/web-build/
+web/dist/
+web-admin/dist/
+web-citizen/dist/
+
+# Python virtual environment
+backend/venv/
+backend/.venv/
+venv/
+.venv/
+
+# Python cache & compiled files
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/*.pyd
+.pytest_cache/
+backend/.pytest_cache/
+
+# Databases
+backend/landslide.db
+*.db
+*.sqlite
+
+# Environment variables & secrets
+.env
+backend/.env
+mobile/.env
+
+# OS system files
+.DS_Store
+Thumbs.db
