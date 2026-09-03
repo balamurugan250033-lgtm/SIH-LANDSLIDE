@@ -2,7 +2,15 @@
 
 An offline-capable, multi-platform landslide monitoring and alerting system for the North-Eastern Region of India. The platform combines machine-learning risk assessment, citizen reporting, GIS views, official alert dispatch, and mobile mesh relay for low-connectivity environments.
 
-![Landslide Sentinel visual](web/src/assets/hero.png)
+## Product Photos
+
+### Citizen safety platform
+
+![Citizen safety platform](docs/screenshots/citizen-platform.png)
+
+### Landslide Sentinel app mark
+
+![Landslide Sentinel app mark](web/src/assets/hero.png)
 
 ## Demo Recordings
 
@@ -15,13 +23,28 @@ The repository includes recorded walkthroughs of the working interfaces:
 
 GitHub may offer these `.webm` files as downloads rather than inline players. Download a recording and open it in a browser or VLC.
 
-## Screenshots and Report
+<video controls width="720" src="web-citizen/recordings/landslide-citizen-full-demo.webm"></video>
 
-The recorded walkthroughs above show the citizen and admin screens. The complete project report includes the architecture, data flow, deployment instructions, technology choices, testing notes, monitored regions, and future enhancements:
+<video controls width="720" src="web-citizen/recordings/landslide-admin-full-demo.webm"></video>
+
+## Report and Project Documentation
+
+The complete project report describes the problem, solution architecture, data flow, ML risk engine, offline-first mobile workflow, mesh alert relay, deployment instructions, testing notes, monitored regions, and future enhancements. The recorded walkthroughs above show the citizen and admin screens in action.
 
 - [Open the complete project report](PROJECT_REPORT.html)
 - [Offline QA checklist](OFFLINE_QA_CHECKLIST.md)
 - [Smart India Hackathon presentation](SIH2026-IDEA-Presentation-Landslide-NER-UPDATED.pptx)
+
+### Report at a glance
+
+| Area | Implementation |
+| --- | --- |
+| Risk assessment | Random Forest probability inference mapped to Low, Moderate, High, and Severe |
+| Citizen access | React/Vite web portal and React Native mobile app |
+| Administration | Region monitoring, alert creation, preview, and broadcast workflows |
+| Resilience | SQLite cache, offline report queue, automatic sync, and peer-to-peer mesh relay |
+| Situational awareness | GIS map, citizen reports, notifications, road status, and evacuation information |
+| Backend | FastAPI REST API, SQLAlchemy models, SQLite persistence, and validation services |
 
 ## Platform Features
 
