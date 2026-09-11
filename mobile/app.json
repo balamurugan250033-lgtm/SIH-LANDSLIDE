@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "Landslide Sentinel",
-    "slug": "landslide-sentinel",
+    "name": "T-MINUS",
+    "slug": "t-minus",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -16,12 +16,7 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "package": "com.anonymous.landslidesentinel",
-      "config": {
-        "googleMaps": {
-          "apiKey": "AIzaSyCeT7H0atQY2VTrIlVBsIA08adrMr5cgDY"
-        }
-      }
+      "package": "com.anonymous.landslidesentinel"
     },
     "web": {
       "favicon": "./assets/favicon.png"

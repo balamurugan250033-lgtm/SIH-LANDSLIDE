@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Mod
 import { Feather } from '@expo/vector-icons';
 import RiskCard from '../components/RiskCard';
 import DataStatusBadge from '../components/DataStatusBadge';
+import { NER_STATES, getStateForRegion } from '../data/nerRegions';
 
 export default function HomeScreen({
   regions,
@@ -13,6 +14,7 @@ export default function HomeScreen({
   onSelectTab
 }) {
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedState, setSelectedState] = useState(null);
 
   const totalRegions = regions.length;
   const severeCount = Object.values(riskStatuses).filter(
@@ -26,9 +28,10 @@ export default function HomeScreen({
   ).length;
   const activeAlertCount = severeCount + highCount + moderateCount;
 
-  const filteredRegions = regions.filter((region) =>
-    region.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredRegions = regions.filter((region) => {
+    const matchesState = !selectedState || getStateForRegion(region.name) === selectedState;
+    return matchesState && region.name.toLowerCase().includes(searchQuery.toLowerCase());
+  });
 
   const renderHeader = () => (
     <View style={styles.header}>
@@ -61,6 +64,17 @@ export default function HomeScreen({
           onChangeText={setSearchQuery}
         />
       </View>
+      <FlatList
+        horizontal
+        data={['ALL NER', ...NER_STATES]}
+        keyExtractor={(item) => item}
+        showsHorizontalScrollIndicator={false}
+        style={styles.stateList}
+        renderItem={({ item }) => {
+          const state = item === 'ALL NER' ? null : item;
+          return <TouchableOpacity style={[styles.stateChip, selectedState === state && styles.stateChipActive]} onPress={() => setSelectedState(state)}><Text style={[styles.stateChipText, selectedState === state && styles.stateChipTextActive]}>{item}</Text></TouchableOpacity>;
+        }}
+      />
     </View>
   );
 
@@ -122,6 +136,11 @@ const styles = StyleSheet.create({
   searchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F8FAFC', borderRadius: 10, borderWidth: 1, borderColor: '#E2E8F0', paddingHorizontal: 12, height: 44 },
   searchIcon: { marginRight: 8 },
   searchInput: { flex: 1, fontSize: 14, color: '#0F172A', paddingVertical: 0 },
+  stateList: { marginTop: 12 },
+  stateChip: { marginRight: 6, paddingHorizontal: 10, paddingVertical: 7, borderRadius: 6, borderWidth: 1, borderColor: '#CBD5E1', backgroundColor: '#FFFFFF' },
+  stateChipActive: { borderColor: '#2563EB', backgroundColor: '#EFF6FF' },
+  stateChipText: { color: '#64748B', fontSize: 10, fontWeight: '700' },
+  stateChipTextActive: { color: '#2563EB' },
   listContent: { padding: 16, paddingBottom: 100 },
   emptyContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 60, paddingHorizontal: 40 },
   emptyTitle: { fontSize: 16, fontWeight: '600', color: '#475569', marginTop: 12 },

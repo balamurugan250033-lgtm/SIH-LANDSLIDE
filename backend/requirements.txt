@@ -1,11 +1,14 @@
 fastapi
 uvicorn
 sqlalchemy
+psycopg2-binary
 pydantic
 pydantic-settings
 xgboost
 pandas
 scikit-learn
+joblib
+shap
 requests
 python-dotenv
 pyjwt

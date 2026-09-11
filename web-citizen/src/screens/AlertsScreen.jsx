@@ -8,27 +8,37 @@ const SEVERITY_COLORS = {
   SEVERE: { bg: '#FECACA', text: '#7C2D12', border: '#FCA5A5' },
 };
 
-export default function AlertsScreen({ alerts: initialAlerts }) {
+function formatAlertDate(alert) {
+  const d = alert?.created_at || alert?.timestamp;
+  if (!d || Number.isNaN(Date.parse(d))) return 'Just now';
+  return new Date(d).toLocaleString();
+}
+
+export default function AlertsScreen({ alerts: initialAlerts, regions = [] }) {
   const [alerts, setAlerts] = useState(initialAlerts || []);
   const [filter, setFilter] = useState('all');
 
-  useEffect(() => { setAlerts(initialAlerts || []); }, [initialAlerts]);
+  useEffect(() => {
+    setAlerts(initialAlerts || []);
+  }, [initialAlerts]);
 
-  const filtered = filter === 'all' ? alerts : alerts.filter(a => a.severity === filter);
+  const filtered = filter === 'all'
+    ? alerts
+    : alerts.filter(a => (a.severity || a.risk_level) === filter);
 
   return (
     <div className="panel">
       <div className="panel-header">
         <h2>
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-          Active Alerts
+          Active Landslide Alerts & Warnings
         </h2>
-        <span className="panel-badge">{filtered.length} alerts</span>
+        <span className="panel-badge">{filtered.length} active</span>
       </div>
       <div style={{ padding: '0.75rem 1.5rem', borderBottom: '1px solid var(--border)', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
         {['all', 'SEVERE', 'CRITICAL', 'HIGH', 'MODERATE', 'LOW'].map(f => (
           <button key={f} onClick={() => setFilter(f)} className={`nav-link ${filter === f ? 'active' : ''}`} style={{ fontSize: '0.8rem', padding: '0.4rem 0.75rem' }}>
-            {f === 'all' ? 'All' : f}
+            {f === 'all' ? 'All Alerts' : f}
           </button>
         ))}
       </div>
@@ -36,29 +46,35 @@ export default function AlertsScreen({ alerts: initialAlerts }) {
         {filtered.length === 0 && (
           <div className="empty-state">
             <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-            <p>No alerts match this filter.</p>
+            <p>No active alerts match this severity level.</p>
           </div>
         )}
-        {filtered.map((alert, i) => (
-          <div key={i} className="alert-card" style={{ borderLeft: `4px solid ${SEVERITY_COLORS[alert.severity]?.text || '#64748B'}` }}>
-            <div className="alert-card-header">
-              <div className="alert-card-title">
-                <span className="region-risk-badge" style={{ background: SEVERITY_COLORS[alert.severity]?.bg, color: SEVERITY_COLORS[alert.severity]?.text }}>
-                  {alert.severity}
-                </span>
-                {alert.alert_type}
+        {filtered.map((alert, i) => {
+          const level = alert.severity || alert.risk_level || 'MODERATE';
+          const theme = SEVERITY_COLORS[level] || { bg: '#F1F5F9', text: '#475569', border: '#CBD5E1' };
+          return (
+            <div key={alert.id || i} className="alert-card" style={{ borderLeft: `4px solid ${theme.text}` }}>
+              <div className="alert-card-header">
+                <div className="alert-card-title">
+                  <span className="region-risk-badge" style={{ background: theme.bg, color: theme.text }}>
+                    {level}
+                  </span>
+                  {alert.alert_type || 'Landslide Warning'}
+                </div>
+                <div className="alert-time">{formatAlertDate(alert)}</div>
               </div>
-              <div className="alert-time">{new Date(alert.created_at).toLocaleString()}</div>
+              <div className="alert-card-region" style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>
+                Zone: {regions.find(r => r.region_id === alert.region_id)?.name || `Region #${alert.region_id}`}
+              </div>
+              <div className="alert-card-reason">{alert.reason || 'High slope instability and soil saturation detected.'}</div>
+              <div className="alert-card-footer">
+                <span>Risk Score:</span> {alert.risk_score ? `${(alert.risk_score * 100).toFixed(0)}%` : level} &nbsp;|&nbsp;
+                <span>Rainfall:</span> {alert.rainfall_mm ?? '--'}mm &nbsp;|&nbsp;
+                <span>Soil Saturation:</span> {alert.soil_saturation ?? '--'}%
+              </div>
             </div>
-            <div className="alert-card-region">Region: {alert.region_id}</div>
-            <div className="alert-card-reason">{alert.reason}</div>
-            <div className="alert-card-footer">
-              <span>Risk:</span> {alert.risk_level} &nbsp;|&nbsp;
-              <span>Rainfall:</span> {alert.rainfall_mm}mm &nbsp;|&nbsp;
-              <span>Soil:</span> {alert.soil_saturation}%
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

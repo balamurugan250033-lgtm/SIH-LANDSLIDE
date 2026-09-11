@@ -4,18 +4,29 @@ import Login from './Login.jsx';
 import App from './App.jsx';
 import './styles.css';
 
-function getToken() { return localStorage.getItem('admin_token'); }
+function RootApp() {
+  const [token, setToken] = useState(() => localStorage.getItem('admin_token'));
 
-createRoot(document.getElementById('root')).render(
-  getToken() ? <AppWrapper /> : <LoginPage />
-);
+  if (!token) {
+    return (
+      <Login
+        onLogin={(t) => {
+          localStorage.setItem('admin_token', t);
+          setToken(t);
+        }}
+      />
+    );
+  }
 
-function AppWrapper() {
-  const [token, setToken] = useState(getToken());
-  if (!token) return <LoginPage />;
-  return <App token={token} onLogout={() => { localStorage.removeItem('admin_token'); setToken(null); }} />;
+  return (
+    <App
+      token={token}
+      onLogout={() => {
+        localStorage.removeItem('admin_token');
+        setToken(null);
+      }}
+    />
+  );
 }
 
-function LoginPage() {
-  return <Login onLogin={(t) => { localStorage.setItem('admin_token', t); window.location.reload(); }} />;
-}
+createRoot(document.getElementById('root')).render(<RootApp />);

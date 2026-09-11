@@ -71,6 +71,7 @@ class TwilioAlertService:
         self.account_sid = settings.TWILIO_ACCOUNT_SID
         self.auth_token = settings.TWILIO_AUTH_TOKEN
         self.from_number = settings.TWILIO_FROM_NUMBER
+        self.alert_recipient = settings.TWILIO_ALERT_RECIPIENT
         self._client = None
 
     def get_client(self):
@@ -143,10 +144,19 @@ class TwilioAlertService:
                 }
             except Exception as e:
                 last_error = str(e)
+                error_msg = str(e).lower()
+                # Trial accounts can only use predefined templates — fall back to simulation
+                if "template" in error_msg or "572006" in error_msg or "trial" in error_msg:
+                    logger.warning(f"Twilio trial restriction for {phone}: {e}. Using simulation mode.")
+                    return {
+                        "status": "simulated",
+                        "sid": f"SM_sim_{int(time.time() * 1000)}",
+                        "to": phone,
+                        "message": message_body,
+                    }
                 logger.warning(f"Twilio SMS send attempt {attempt}/{max_retries} failed for {phone}: {e}")
                 
                 # Check for permanent errors where retries won't help (e.g. invalid number)
-                error_msg = str(e).lower()
                 if "invalid" in error_msg or "unverified" in error_msg or "authenticate" in error_msg:
                     break
                     
@@ -167,6 +177,7 @@ class TwilioAlertService:
     ) -> Dict[str, Any]:
         """
         Broadcasts Twilio SMS alerts to all registered citizens subscribed to the affected region.
+        Also sends to the default alert recipient if configured.
         Updates Alert delivery status and recipient confirmation counters in the database.
         """
         # Determine region name
@@ -185,7 +196,17 @@ class TwilioAlertService:
         failed_count = 0
 
         # If no subscribers exist in DB, check if test contacts or fallback is needed
-        recipients = subscribers
+        recipients = list(subscribers)
+        if self.alert_recipient and not any(r.phone_number == self.alert_recipient for r in recipients):
+            # Create a temporary subscriber for the default alert recipient
+            from app.models.models import User
+            default_recipient = db.query(User).filter(User.phone_number == self.alert_recipient).first()
+            if not default_recipient:
+                default_recipient = User(username="default_alert_recipient", email=None, hashed_password="unused", role="citizen", phone_number=self.alert_recipient, preferred_language="en")
+                db.add(default_recipient)
+                db.flush()
+                db.refresh(default_recipient)
+            recipients.append(default_recipient)
         if not recipients:
             logger.info(f"No phone subscribers registered for region {alert.region_id}.")
 

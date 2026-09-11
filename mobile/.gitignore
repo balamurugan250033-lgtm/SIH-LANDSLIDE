@@ -33,6 +33,9 @@ yarn-error.*
 # local env files
 .env*.local
 
+# Android local properties
+local.properties
+
 # typescript
 *.tsbuildinfo
 

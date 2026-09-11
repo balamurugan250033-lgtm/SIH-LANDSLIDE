@@ -7,6 +7,7 @@ import { meshService } from '../services/mesh';
 export default function NotificationsScreen({ regions }) {
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [offline, setOffline] = useState(false);
 
   const loadNotifications = async () => {
     setLoading(true);
@@ -16,8 +17,9 @@ export default function NotificationsScreen({ regions }) {
       try {
         const res = await api.get('/citizen/notifications');
         apiNotifs = res.data.map((n) => ({ ...n, received_via_mesh: false }));
+        setOffline(false);
       } catch (e) {
-        console.warn('API notifications fetch failed, using cache only', e);
+        setOffline(true);
       }
       const combined = [...apiNotifs, ...meshAlerts].sort((a, b) => new Date(b.sent_at || b.timestamp) - new Date(a.sent_at || a.timestamp));
       setNotifications(combined);
@@ -80,7 +82,7 @@ export default function NotificationsScreen({ regions }) {
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Official Notices</Text>
-        <Text style={styles.headerSubtitle}>Government alerts and mesh-relayed warnings</Text>
+        <Text style={styles.headerSubtitle}>{offline ? 'Offline mode — showing saved and mesh-relayed warnings' : 'Government alerts and mesh-relayed warnings'}</Text>
       </View>
       <FlatList
         data={notifications}

@@ -8,6 +8,7 @@ export default function EvacuationRoutesScreen({ regions }) {
   const [routes, setRoutes] = React.useState([]);
   const [loading, setLoading] = React.useState(false);
   const [nearestRoute, setNearestRoute] = React.useState(null);
+  const [offline, setOffline] = React.useState(false);
 
   const loadRoutes = async () => {
     setLoading(true);
@@ -15,8 +16,9 @@ export default function EvacuationRoutesScreen({ regions }) {
       const res = await api.get('/citizen/road-statuses');
       const openRoutes = res.data.filter((r) => r.status === 'open' || r.status === 'at_risk');
       setRoutes(openRoutes);
+      setOffline(false);
     } catch (e) {
-      console.warn('Failed to load routes', e);
+      setOffline(true);
     } finally {
       setLoading(false);
     }
@@ -60,7 +62,7 @@ export default function EvacuationRoutesScreen({ regions }) {
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Evacuation Routes</Text>
-        <Text style={styles.headerSubtitle}>Safe corridors and alternate highways</Text>
+        <Text style={styles.headerSubtitle}>{offline ? 'Offline mode — reconnect to refresh route guidance' : 'Safe corridors and alternate highways'}</Text>
       </View>
       <TouchableOpacity style={styles.locateButton} onPress={findNearestRoute}>
         <Feather name="navigation" size={18} color="#FFFFFF" />

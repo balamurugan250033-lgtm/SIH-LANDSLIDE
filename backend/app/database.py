@@ -3,8 +3,11 @@ from sqlalchemy.orm import declarative_base
 from sqlalchemy.orm import sessionmaker
 from app.core.config import settings
 
+is_sqlite = settings.DATABASE_URL.startswith("sqlite")
 engine = create_engine(
-    settings.DATABASE_URL, connect_args={"check_same_thread": False}
+    settings.DATABASE_URL,
+    connect_args={"check_same_thread": False} if is_sqlite else {},
+    pool_pre_ping=not is_sqlite,
 )
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
@@ -31,6 +34,7 @@ def migrate_schema():
         if "alerts" in table_names:
             alert_columns = {column["name"] for column in inspector.get_columns("alerts")}
             alert_additions = {
+                "alert_type": "VARCHAR DEFAULT 'LANDSLIDE_WARNING'",
                 "delivery_status": "VARCHAR DEFAULT 'pending'",
                 "delivery_channel": "VARCHAR DEFAULT 'system'",
                 "sent_count": "INTEGER DEFAULT 0",
@@ -62,6 +66,20 @@ def migrate_schema():
             for name, sql_type in additions.items():
                 if name not in report_columns:
                     connection.execute(text(f"ALTER TABLE citizen_reports ADD COLUMN {name} {sql_type}"))
+
+        if "observations" in table_names:
+            observation_columns = {column["name"] for column in inspector.get_columns("observations")}
+            additions = {
+                "rainfall_24h": "FLOAT", "rainfall_72h": "FLOAT", "soil_moisture": "FLOAT",
+                "elevation": "FLOAT", "slope": "FLOAT", "soil_type": "VARCHAR", "geology": "VARCHAR",
+                "previous_landslide": "BOOLEAN", "temperature": "FLOAT", "risk_score": "FLOAT", "risk_level": "VARCHAR",
+            }
+            for name, sql_type in additions.items():
+                if name not in observation_columns:
+                    connection.execute(text(f"ALTER TABLE observations ADD COLUMN {name} {sql_type}"))
+            connection.execute(text("UPDATE observations SET rainfall_24h = rainfall_mm WHERE rainfall_24h IS NULL"))
+            connection.execute(text("UPDATE observations SET soil_moisture = soil_moisture_percent WHERE soil_moisture IS NULL"))
+            connection.execute(text("UPDATE observations SET slope = slope_angle WHERE slope IS NULL"))
 
 
 def get_db():
@@ -102,62 +120,8 @@ def seed_data():
             db.commit()
             print("Database seeded with NER landslide-prone regions.")
 
-        regions = db.query(models.Region).all()
-        if db.query(models.Observation).count() == 0:
-            now = __import__('datetime').datetime.utcnow()
-            for index, region in enumerate(regions):
-                rainfall = 42 + index * 18
-                moisture = 45 + index * 9
-                slope = 24 + index * 6
-                db.add(models.Observation(
-                    region_id=region.id,
-                    rainfall_mm=float(rainfall),
-                    soil_moisture_percent=float(moisture),
-                    slope_angle=float(slope),
-                    timestamp=now,
-                    is_stale=False,
-                    data_quality_score=0.96
-                ))
-                if index % 2 == 0:
-                    db.add(models.Alert(
-                        region_id=region.id,
-                        risk_level='MODERATE' if index % 2 == 0 else 'HIGH',
-                        risk_score=58 + index * 8,
-                        timestamp=now,
-                        reason='Heavy rainfall and unstable slope conditions observed.'
-                    ))
-            db.commit()
-            print("Seeded live demo observations and alerts for active monitoring.")
-
-        if db.query(models.CitizenReport).count() == 0:
-            demo_region = db.query(models.Region).first()
-            if demo_region:
-                db.add(models.CitizenReport(
-                    region_id=demo_region.id,
-                    hazard_type='Soil Cracks',
-                    description='Visible soil cracks and muddy flow near the hillside path.',
-                    latitude=demo_region.latitude + 0.02,
-                    longitude=demo_region.longitude + 0.03,
-                    timestamp=__import__('datetime').datetime.utcnow(),
-                    status='Submitted'
-                ))
-                db.commit()
-
-        if db.query(models.RoadStatus).count() == 0:
-            regions = db.query(models.Region).all()
-            for idx, region in enumerate(regions):
-                statuses = ["open", "at_risk", "blocked"]
-                reasons = ["Clear", "Minor landslides reported", "Major landslide - road closed"]
-                alternatives = ["NH-6 alternate route", "Local village road", "Helicopter rescue only"]
-                db.add(models.RoadStatus(
-                    region_id=region.id,
-                    road_name=f"{region.name} Main Road",
-                    status=statuses[idx % 3],
-                    reason=reasons[idx % 3],
-                    alternative_route=alternatives[idx % 3]
-                ))
-            db.commit()
-            print("Seeded road statuses for regions.")
+        # Operational observations, alerts, reports, and road statuses must come
+        # from configured integrations or authenticated operator actions.
     except Exception as e:
         print(f"Error seeding database: {e}")
         db.rollback()

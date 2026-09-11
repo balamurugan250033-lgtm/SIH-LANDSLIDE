@@ -1,11 +1,11 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { StyleSheet, View, StatusBar, Text, AppState } from 'react-native';
+import { useState, useEffect, useCallback } from 'react';
+import { StyleSheet, View, StatusBar, Text, AppState, TouchableOpacity } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import Constants from 'expo-constants';
 
 import { shouldInitPushNotifications } from './src/utils/pushNotifications';
-import api from './src/services/api';
+import api, { setOfflineMode } from './src/services/api';
 import { dbService } from './src/services/database';
 import { syncService } from './src/services/sync';
 import { meshService } from './src/services/mesh';
@@ -18,6 +18,7 @@ import RoadStatusScreen from './src/screens/RoadStatusScreen';
 import EvacuationRoutesScreen from './src/screens/EvacuationRoutesScreen';
 import ReportScreen from './src/screens/ReportScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
+import SentinelMeshScreen from './src/screens/SentinelMeshScreen';
 
 let Notifications = null;
 
@@ -43,11 +44,17 @@ export default function App() {
   
   const [isOnline, setIsOnline] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
+  const [manualOffline, setManualOffline] = useState(false);
 
   // Initialize SQLite database and load local cached entities on startup
   useEffect(() => {
     const bootstrap = async () => {
       await dbService.init();
+      const savedMode = await AsyncStorage.getItem('manual_offline_mode');
+      if (savedMode === 'true') {
+        setManualOffline(true);
+        setOfflineMode(true);
+      }
       await loadCachedData();
       await checkQueuedCount();
       await fetchData();
@@ -156,7 +163,7 @@ export default function App() {
       const fetchedRiskStatuses = {};
       for (const reg of fetchedRegions) {
         try {
-          const riskRes = await api.get(`/citizen/risk?region_id=${reg.id}`);
+          const riskRes = await api.get(`/risk/${reg.id}`);
           fetchedRiskStatuses[reg.id] = riskRes.data;
         } catch (err) {
           fetchedRiskStatuses[reg.id] = {
@@ -232,7 +239,17 @@ export default function App() {
     return result;
   };
 
-  const renderActiveScreen = () => {
+   const toggleOfflineMode = async () => {
+    const newValue = !manualOffline;
+    setManualOffline(newValue);
+    setOfflineMode(newValue);
+    await AsyncStorage.setItem('manual_offline_mode', String(newValue));
+    if (!newValue) {
+      await fetchData();
+    }
+  };
+
+   const renderActiveScreen = () => {
     switch (activeTab) {
       case 'home':
         return (
@@ -265,6 +282,8 @@ export default function App() {
             onSyncNow={handleSync}
           />
         );
+      case 'mesh':
+        return <SentinelMeshScreen isOnline={isOnline} />;
       case 'profile':
         return <ProfileScreen />;
       default:
@@ -280,11 +299,21 @@ export default function App() {
         {/* Custom Header Bar */}
         <View style={styles.header}>
           <View style={styles.headerDotRow}>
-            <View style={[styles.networkDot, { backgroundColor: isOnline ? '#10B981' : '#EF4444' }]} />
+            <View style={[styles.networkDot, { backgroundColor: manualOffline ? '#EF4444' : (isOnline ? '#10B981' : '#EF4444') }]} />
             <Text style={styles.headerTitle}>
-              {isOnline ? 'GOVT. OF INDIA | LANDSLIDE PORTAL' : 'OFFLINE MODE | LOCAL SQLITE CACHE'}
+              {manualOffline ? 'OFFLINE MODE' : (isOnline ? 'GOVT. OF INDIA | LANDSLIDE PORTAL' : 'OFFLINE | LOCAL CACHE')}
             </Text>
           </View>
+          <TouchableOpacity
+            style={[styles.offlineToggle, { backgroundColor: manualOffline ? '#2563EB' : '#F1F5F9' }]}
+            onPress={toggleOfflineMode}
+            activeOpacity={0.8}
+          >
+            <View style={[styles.toggleKnob, { backgroundColor: manualOffline ? '#FFFFFF' : '#94A3B8' }]} />
+            <Text style={[styles.toggleText, manualOffline && { color: '#FFFFFF' }]}>
+              {manualOffline ? 'OFFLINE' : 'ONLINE'}
+            </Text>
+          </TouchableOpacity>
         </View>
 
         {/* Content Panel */}
@@ -332,6 +361,26 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#475569',
     letterSpacing: 1.0,
+  },
+  offlineToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+  },
+  toggleKnob: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    marginRight: 6,
+  },
+  toggleText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#64748B',
   },
   content: {
     flex: 1,

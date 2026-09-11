@@ -13,6 +13,7 @@ export default function CustomTabBar({ activeTab, onTabPress, queuedCount }) {
     { id: 'roads', icon: 'navigation', label: 'Roads' },
     { id: 'evacuation', icon: 'flag', label: 'Routes' },
     { id: 'report', icon: 'edit-3', label: 'Report' },
+    { id: 'mesh', icon: 'radio', label: 'Mesh' },
   ];
 
   return (

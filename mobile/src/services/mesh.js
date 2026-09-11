@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Platform, NativeModules, DeviceEventEmitter } from 'react-native';
+import { Platform, NativeModules, DeviceEventEmitter, PermissionsAndroid } from 'react-native';
+import { acceptEnvelope, createEnvelope, getNodeId, markMessageState } from './meshProtocol';
 
 const MESH_CACHE_KEY = '@mesh_seen_cache';
 const MESH_ALERTS_KEY = '@mesh_alerts';
@@ -16,8 +17,19 @@ class MeshService {
 
   async init() {
     await this.loadSeenCache();
+    await getNodeId();
     this.loadNativeModule();
     this.setupNativeListener();
+  }
+
+  async requestPermissions() {
+    if (Platform.OS !== 'android' || Platform.Version < 31) return true;
+    const result = await PermissionsAndroid.requestMultiple([
+      PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
+      PermissionsAndroid.PERMISSIONS.BLUETOOTH_ADVERTISE,
+      PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
+    ]);
+    return Object.values(result).every((value) => value === PermissionsAndroid.RESULTS.GRANTED);
   }
 
   loadNativeModule() {
@@ -99,11 +111,12 @@ class MeshService {
   }
 
   async addLocalAlert(message) {
-    if (this.seenCache.has(message.msg_id)) {
+    const messageId = message.messageId || message.msg_id;
+    if (this.seenCache.has(messageId)) {
       return null;
     }
 
-    this.markSeen(message.msg_id);
+    this.markSeen(messageId);
     const alerts = await this.loadCachedAlerts();
     const entry = { ...message, received_via_mesh: true };
     alerts.unshift(entry);
@@ -173,14 +186,17 @@ class MeshService {
   async handleIncomingMessage(rawMessage) {
     try {
       const message = typeof rawMessage === 'string' ? JSON.parse(rawMessage) : rawMessage;
-      if (this.seenCache.has(message.msg_id)) return null;
+      const accepted = await acceptEnvelope(message);
+      if (!accepted.accepted) return null;
+      if (this.seenCache.has(message.messageId || message.msg_id)) return null;
       if (message.ttl <= 0) return null;
 
       const entry = await this.addLocalAlert(message);
       if (!entry) return null;
 
       if (message.ttl > 1) {
-        this.relayMessage({ ...entry, ttl: entry.ttl - 1 });
+        await markMessageState(message.messageId, 'RELAYING');
+        this.relayMessage({ ...entry, ttl: entry.ttl - 1, hopCount: (entry.hopCount || 0) + 1 });
       }
       return entry;
     } catch (e) {
@@ -196,6 +212,10 @@ class MeshService {
     } catch (e) {
       console.warn('Failed to relay mesh message', e);
     }
+  }
+
+  async createReportEnvelope(payload) {
+    return createEnvelope({ messageType: 'CITIZEN_REPORT', payload, priority: 'HIGH' });
   }
 
   async postMeshAlertsToBackend(apiPost) {

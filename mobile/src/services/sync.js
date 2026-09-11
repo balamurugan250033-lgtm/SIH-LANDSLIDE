@@ -43,7 +43,7 @@ export const syncService = {
         try {
           const payload = {
             region_id: report.region_id,
-            hazard_type: report.hazard_type,
+            hazard_types: [report.hazard_type],
             description: report.description,
             latitude: report.latitude,
             longitude: report.longitude,

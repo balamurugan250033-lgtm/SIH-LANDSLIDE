@@ -31,19 +31,41 @@ def evaluate_warning_decision(observation: Observation) -> Optional[dict]:
     # Decision Logic
     risk_level = ml_result["risk_level"]
     risk_score = ml_result["risk_score"]
-    
-    # Return alert decision for MODERATE and above
-    if risk_level in ["MODERATE", "HIGH", "CRITICAL", "SEVERE"]:
-        tier_reason = {
-            "SEVERE": "Severe landslide risk. Immediate evacuation advised.",
-            "CRITICAL": "Critical landslide risk. Prepare for immediate evacuation.",
-            "HIGH": "High landslide risk. Avoid the area and stay alert.",
-            "MODERATE": "Moderate landslide risk. Exercise caution and monitor conditions."
-        }
-        return {
-            "risk_level": risk_level,
-            "risk_score": risk_score,
-            "reason": tier_reason.get(risk_level, f"Elevated indicators: Rainfall={features['rainfall_mm']}mm, Soil={features['soil_moisture_percent']}%. ML Confidence Score: {risk_score:.2f}")
-        }
-        
-    return None
+    factors = ml_result.get("factors", {})
+    rtf = factors.get("rainfall_threshold_factor", 0)
+    smf = factors.get("soil_moisture_factor", 0)
+    stf = factors.get("slope_factor", 0)
+
+    # Build contextual warning messages based on real environmental triggers
+    reasons = {
+        "SEVERE": (
+            f"Elevated indicators: immediate landslide evacuation required. Rainfall {features['rainfall_mm']}mm in 24h "
+            f"({rtf:.0%} of critical 150mm threshold) with soil saturation {features['soil_moisture_percent']:.0f}% "
+            f"({smf:.0%} of critical) and slope {features['slope_angle']:.0f}° ({stf:.0%} of critical 35°). "
+            f"Critical pore-pressure buildup destabilising slope mass. Evacuate immediately."
+        ),
+        "CRITICAL": (
+            f"Landslide imminent within 24-48h. Rainfall {features['rainfall_mm']}mm with soil saturation "
+            f"{features['soil_moisture_percent']:.0f}% approaching critical. Slope {features['slope_angle']:.0f}° "
+            f"at failure envelope. Avoid all hill slopes and evacuate vulnerable zones."
+        ),
+        "HIGH": (
+            f"High landslide probability. Rainfall {features['rainfall_mm']}mm and soil saturation "
+            f"{features['soil_moisture_percent']:.0f}% increasing pore pressure. Steep slope ({features['slope_angle']:.0f}°) "
+            f"at risk of rotational slip. Restrict movement, avoid driving through landslide zones."
+        ),
+        "MODERATE": (
+            f"Moderate risk: monitor conditions. Rainfall {features['rainfall_mm']}mm with soil saturation "
+            f"{features['soil_moisture_percent']:.0f}% and slope {features['slope_angle']:.0f}°. "
+            f"Continue monitoring official channels and prepare contingency plans."
+        ),
+    }
+    # Only generate alerts for MODERATE and above
+    if risk_level not in ["MODERATE", "HIGH", "CRITICAL", "SEVERE"]:
+        return None
+
+    return {
+        "risk_level": risk_level,
+        "risk_score": risk_score,
+        "reason": reasons.get(risk_level, f"Stable conditions. Rainfall={features['rainfall_mm']}mm, Soil={features['soil_moisture_percent']}%, Slope={features['slope_angle']}°"),
+    }

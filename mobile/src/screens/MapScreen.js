@@ -2,13 +2,14 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, Dimensions, Platform, FlatList, TouchableOpacity } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 
-let MapView, Marker, Callout;
+let MapView, Marker, Callout, UrlTile;
 if (Platform.OS !== 'web') {
   try {
     const Maps = require('react-native-maps');
     MapView = Maps.default;
     Marker = Maps.Marker;
     Callout = Maps.Callout;
+    UrlTile = Maps.UrlTile;
   } catch (e) {
     console.warn('Failed to load react-native-maps natively:', e);
   }
@@ -16,6 +17,7 @@ if (Platform.OS !== 'web') {
 
 export default function MapScreen({ regions, riskStatuses }) {
   const [selectedRegion, setSelectedRegion] = useState(null);
+  const [showOnlineMap, setShowOnlineMap] = useState(false);
 
   // Region location markers
   const getMarkerColor = (regionId) => {
@@ -43,7 +45,7 @@ export default function MapScreen({ regions, riskStatuses }) {
         longitudeDelta: 15.0,
       };
 
-  const renderWebMockMap = () => {
+  const renderWebFallbackMap = () => {
     return (
       <View style={styles.webMapContainer}>
         <View style={styles.webSidebar}>
@@ -132,11 +134,12 @@ export default function MapScreen({ regions, riskStatuses }) {
   };
 
   const renderNativeMap = () => {
-    if (!MapView) {
+    if (!MapView || !showOnlineMap) {
       return (
         <View style={styles.fallbackContainer}>
-          <Text style={styles.fallbackTitle}>Map library unavailable</Text>
-          <Text style={styles.fallbackText}>Use the web app or a development build for full GIS maps.</Text>
+          <Text style={styles.fallbackTitle}>Offline GIS map</Text>
+          <Text style={styles.fallbackText}>Saved NER locations and risk readings are available without internet.</Text>
+          {MapView && <TouchableOpacity style={styles.onlineMapButton} onPress={() => setShowOnlineMap(true)}><Text style={styles.onlineMapButtonText}>Try online basemap</Text></TouchableOpacity>}
           <FlatList
             data={regions}
             keyExtractor={(item) => item.id.toString()}
@@ -157,7 +160,15 @@ export default function MapScreen({ regions, riskStatuses }) {
     }
 
     return (
-      <MapView style={styles.map} initialRegion={initialRegion}>
+      <View style={styles.nativeMapContainer}>
+      <MapView style={styles.map} initialRegion={initialRegion} mapType={UrlTile ? "none" : "standard"}>
+        {UrlTile && (
+          <UrlTile
+            urlTemplate="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+            maximumZ={19}
+            flipY={false}
+          />
+        )}
         {regions.map((region) => {
           const status = riskStatuses[region.id] || { current_alert: null, latest_observation: null, data_status: 'UNAVAILABLE' };
           const riskLevel = status.current_alert ? status.current_alert.risk_level : 'LOW';
@@ -186,12 +197,15 @@ export default function MapScreen({ regions, riskStatuses }) {
           );
         })}
       </MapView>
+      <View style={styles.mapSourceBadge} pointerEvents="none"><Text style={styles.mapSourceText}>OpenStreetMap live basemap</Text></View>
+      <TouchableOpacity style={styles.offlineMapButton} onPress={() => setShowOnlineMap(false)}><Text style={styles.offlineMapButtonText}>Offline GIS</Text></TouchableOpacity>
+      </View>
     );
   };
 
   return (
     <View style={styles.container}>
-      {Platform.OS === 'web' ? renderWebMockMap() : renderNativeMap()}
+      {Platform.OS === 'web' ? renderWebFallbackMap() : renderNativeMap()}
     </View>
   );
 }
@@ -205,6 +219,25 @@ const styles = StyleSheet.create({
     width: Dimensions.get('window').width,
     height: Dimensions.get('window').height - 120,
   },
+  nativeMapContainer: {
+    flex: 1,
+  },
+  mapSourceBadge: {
+    position: 'absolute',
+    left: 12,
+    top: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.94)',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  mapSourceText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#334155',
+  },
   fallbackContainer: {
     flex: 1,
     alignItems: 'center',
@@ -212,6 +245,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8FAFC',
     padding: 24,
   },
+  onlineMapButton: { backgroundColor: '#2563EB', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 9, marginBottom: 14 },
+  onlineMapButtonText: { color: '#FFFFFF', fontWeight: '700', fontSize: 13 },
+  offlineMapButton: { position: 'absolute', right: 12, top: 12, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16, backgroundColor: 'rgba(255,255,255,.94)', borderWidth: 1, borderColor: '#BFDBFE' },
+  offlineMapButtonText: { fontSize: 11, fontWeight: '700', color: '#1D4ED8' },
   fallbackTitle: {
     fontSize: 18,
     fontWeight: 'bold',

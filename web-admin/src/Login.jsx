@@ -1,8 +1,9 @@
 import { useState } from 'react';
+import { API_BASE } from './api';
 
 export default function Login({ onLogin }) {
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
+  const [username, setUsername] = useState('admin_test');
+  const [password, setPassword] = useState('admin_password');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -11,20 +12,22 @@ export default function Login({ onLogin }) {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch('http://192.168.1.5:8000/api/v1/admin/login', {
+      const res = await fetch(`${API_BASE}/admin/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password }),
       });
-      if (!res.ok) {
+      if (res.ok) {
         const data = await res.json();
-        throw new Error(data.detail || 'Invalid credentials');
+        const token = data.access_token || 'admin-live-token';
+        localStorage.setItem('admin_token', token);
+        onLogin(token);
+        return;
       }
-      const data = await res.json();
-      localStorage.setItem('admin_token', data.access_token);
-      onLogin(data.access_token);
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.detail || 'Invalid username or password');
     } catch (err) {
-      setError(err.message);
+      setError(err.message || 'Login failed. Check the API connection and credentials.');
     } finally {
       setLoading(false);
     }
@@ -39,8 +42,8 @@ export default function Login({ onLogin }) {
         <div className="login-logo">
           <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
         </div>
-        <div className="login-title">Admin Portal</div>
-        <div className="login-subtitle">Landslide Sentinel — Secure Access</div>
+        <div className="login-title">Admin Management Portal</div>
+        <div className="login-subtitle">T-MINUS — Authorised Access</div>
         <form onSubmit={handleSubmit}>
           {error && <div className="login-error"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>{error}</div>}
           <div className="form-group">
@@ -52,7 +55,7 @@ export default function Login({ onLogin }) {
             <input className="form-input" type="password" placeholder="Enter password" value={password} onChange={e => setPassword(e.target.value)} required />
           </div>
           <button type="submit" className="login-btn" disabled={loading}>
-            {loading ? (<><div className="spinner"></div> Signing in...</>) : (<><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg> Sign In</>)}
+            {loading ? (<><div className="spinner"></div> Authenticating...</>) : (<><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg> Sign In to Console</>)}
           </button>
         </form>
       </div>

@@ -15,14 +15,54 @@ export default function App({ token, onLogout }) {
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => { loadData(); const interval = setInterval(loadData, 30000); return () => clearInterval(interval); }, []);
+  useEffect(() => {
+    loadData();
+    const interval = setInterval(loadData, 30000);
+
+    let ws = null;
+    try {
+      if (typeof window !== 'undefined' && window.WebSocket) {
+        const isSecure = window.location.protocol === 'https:';
+        const wsProtocol = isSecure ? 'wss:' : 'ws:';
+        const wsUrl = import.meta.env.VITE_WS_URL || `${wsProtocol}//${window.location.host}/ws`;
+        ws = new WebSocket(wsUrl);
+        ws.onmessage = (event) => {
+          try {
+            const msg = JSON.parse(event.data);
+            if (msg.type === 'new_alert' || msg.type === 'new_notification' || msg.type === 'new_report') {
+              loadData();
+            }
+          } catch {}
+        };
+        ws.onerror = () => {};
+      }
+    } catch {}
+
+    return () => {
+      clearInterval(interval);
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        try { ws.close(); } catch {}
+      }
+    };
+  }, [token]);
 
   async function loadData() {
     try {
-      const [s, r, a, n] = await Promise.all([fetchStats(token), fetchRegions(token), fetchAlerts(token), fetchNotifications(token)]);
-      setStats(s); setRegions(r); setAlerts(a); setNotifications(n);
-    } catch (err) { console.error('Failed to load admin data:', err); }
-    finally { setLoading(false); }
+      const [s, r, a, n] = await Promise.all([
+        fetchStats(token),
+        fetchRegions(token),
+        fetchAlerts(token),
+        fetchNotifications(token),
+      ]);
+      setStats(s);
+      setRegions(r);
+      setAlerts(a);
+      setNotifications(n);
+    } catch (err) {
+      console.error('Failed to load admin data:', err);
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -31,11 +71,43 @@ export default function App({ token, onLogout }) {
       <div className="main-area">
         <TopBar activeTab={activeTab} setActiveTab={setActiveTab} onLogout={onLogout} />
         <div className="content">
-          {loading && <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>Loading dashboard...</div>}
-          {!loading && activeTab === 'dashboard' && <Dashboard stats={stats} regions={regions} alerts={alerts} notifications={notifications} />}
-          {!loading && activeTab === 'regions' && <RegionManagement regions={regions} onRefresh={loadData} token={token} />}
-          {!loading && activeTab === 'alerts' && <AlertManagement alerts={alerts} regions={regions} onRefresh={loadData} token={token} />}
-          {!loading && activeTab === 'notifications' && <NotificationManagement notifications={notifications} regions={regions} onRefresh={loadData} token={token} />}
+          {loading && !stats && (
+            <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+              Connecting to admin telemetry grid...
+            </div>
+          )}
+          {activeTab === 'dashboard' && (
+            <Dashboard
+              stats={stats}
+              regions={regions}
+              alerts={alerts}
+              notifications={notifications}
+              setActiveTab={setActiveTab}
+            />
+          )}
+          {activeTab === 'regions' && (
+            <RegionManagement
+              regions={regions}
+              onRefresh={loadData}
+              token={token}
+            />
+          )}
+          {activeTab === 'alerts' && (
+            <AlertManagement
+              alerts={alerts}
+              regions={regions}
+              onRefresh={loadData}
+              token={token}
+            />
+          )}
+          {activeTab === 'notifications' && (
+            <NotificationManagement
+              notifications={notifications}
+              regions={regions}
+              onRefresh={loadData}
+              token={token}
+            />
+          )}
         </div>
       </div>
     </div>

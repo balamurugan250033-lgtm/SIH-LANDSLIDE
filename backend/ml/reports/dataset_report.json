@@ -1,0 +1,115 @@
+{
+  "database": "./landslide.db",
+  "tables": {
+    "regions": {
+      "columns": [
+        "id",
+        "name",
+        "latitude",
+        "longitude"
+      ],
+      "row_count": 9
+    },
+    "source_health": {
+      "columns": [
+        "id",
+        "source_name",
+        "status",
+        "last_sync"
+      ],
+      "row_count": 3
+    },
+    "observations": {
+      "columns": [
+        "id",
+        "region_id",
+        "timestamp",
+        "rainfall_mm",
+        "soil_moisture_percent",
+        "slope_angle",
+        "is_stale",
+        "data_quality_score"
+      ],
+      "row_count": 27
+    },
+    "citizen_reports": {
+      "columns": [
+        "id",
+        "region_id",
+        "hazard_type",
+        "description",
+        "timestamp",
+        "status",
+        "latitude",
+        "longitude",
+        "media_path",
+        "media_content_type"
+      ],
+      "row_count": 2
+    },
+    "alerts": {
+      "columns": [
+        "id",
+        "region_id",
+        "risk_level",
+        "risk_score",
+        "timestamp",
+        "reason",
+        "alert_type",
+        "delivery_status",
+        "delivery_channel",
+        "sent_count",
+        "failed_count",
+        "delivery_details"
+      ],
+      "row_count": 25
+    },
+    "users": {
+      "columns": [
+        "id",
+        "username",
+        "email",
+        "hashed_password",
+        "role",
+        "phone_number",
+        "preferred_language",
+        "region_id"
+      ],
+      "row_count": 2
+    },
+    "notifications": {
+      "columns": [
+        "id",
+        "region_id",
+        "risk_level",
+        "title",
+        "message",
+        "language",
+        "channel",
+        "status",
+        "delivery_status",
+        "delivery_details",
+        "sent_at",
+        "created_at",
+        "created_by"
+      ],
+      "row_count": 0
+    },
+    "road_statuses": {
+      "columns": [
+        "id",
+        "region_id",
+        "road_name",
+        "status",
+        "reason",
+        "alternative_route",
+        "updated_at"
+      ],
+      "row_count": 9
+    }
+  },
+  "label_status": {
+    "available": false,
+    "reason": "No historical event table found"
+  }
+}

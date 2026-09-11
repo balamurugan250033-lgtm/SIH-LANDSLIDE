@@ -25,6 +25,17 @@ class Observation(Base):
     rainfall_mm = Column(Float, nullable=True)
     soil_moisture_percent = Column(Float, nullable=True)
     slope_angle = Column(Float, nullable=True)
+    rainfall_24h = Column(Float, nullable=True)
+    rainfall_72h = Column(Float, nullable=True)
+    soil_moisture = Column(Float, nullable=True)
+    elevation = Column(Float, nullable=True)
+    slope = Column(Float, nullable=True)
+    soil_type = Column(String, nullable=True)
+    geology = Column(String, nullable=True)
+    previous_landslide = Column(Boolean, nullable=True)
+    temperature = Column(Float, nullable=True)
+    risk_score = Column(Float, nullable=True)
+    risk_level = Column(String, nullable=True)
     
     # Status flags based on data freshness
     is_stale = Column(Boolean, default=False)
@@ -55,6 +66,7 @@ class Alert(Base):
     risk_score = Column(Float, nullable=True)
     timestamp = Column(DateTime, default=datetime.utcnow)
     reason = Column(String)
+    alert_type = Column(String, default="LANDSLIDE_WARNING")
     delivery_status = Column(String, default="pending") # pending, sent, failed, simulated, skipped
     delivery_channel = Column(String, default="system") # system, sms, push, all
     sent_count = Column(Integer, default=0)

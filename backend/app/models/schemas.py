@@ -19,6 +19,17 @@ class ObservationBase(BaseModel):
     rainfall_mm: Optional[float] = None
     soil_moisture_percent: Optional[float] = None
     slope_angle: Optional[float] = None
+    rainfall_24h: Optional[float] = None
+    rainfall_72h: Optional[float] = None
+    soil_moisture: Optional[float] = None
+    elevation: Optional[float] = None
+    slope: Optional[float] = None
+    soil_type: Optional[str] = None
+    geology: Optional[str] = None
+    previous_landslide: Optional[bool] = None
+    temperature: Optional[float] = None
+    risk_score: Optional[float] = None
+    risk_level: Optional[str] = None
 
 class ObservationCreate(ObservationBase):
     region_id: int
@@ -84,6 +95,7 @@ class AlertBase(BaseModel):
     risk_level: str
     risk_score: Optional[float] = None
     reason: str
+    alert_type: Optional[str] = "LANDSLIDE_WARNING"
     delivery_status: Optional[str] = "pending"
     delivery_channel: Optional[str] = "system"
     sent_count: Optional[int] = 0
@@ -99,7 +111,7 @@ class Alert(AlertBase):
 class SourceHealth(BaseModel):
     source_name: str
     status: str
-    last_sync: datetime
+    last_sync: Optional[datetime] = None
     class Config:
         from_attributes = True
 
@@ -108,6 +120,24 @@ class RiskStatusResponse(BaseModel):
     current_alert: Optional[Alert]
     latest_observation: Optional[Observation]
     data_status: str # LIVE, STALE, OFFLINE
+
+class PredictionRequest(BaseModel):
+    location_id: str
+    state: Optional[str] = None
+    district: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    features: dict[str, Optional[float]] = Field(default_factory=dict)
+
+class PredictionResponse(BaseModel):
+    status: str
+    reason: Optional[str] = None
+    location_id: str
+    landslide_probability: Optional[float] = None
+    risk_score: Optional[int] = None
+    risk_level: Optional[str] = None
+    model_version: Optional[str] = None
+    prediction_time: datetime
 
 class UserCreate(BaseModel):
     email: Optional[str] = None
@@ -209,7 +239,8 @@ class RegionDetail(BaseModel):
     slope_angle: Optional[float] = None
     vibration: Optional[bool] = False
     alert_message: Optional[str] = None
-    risk_level: Optional[str] = "LOW"
+    risk_score: Optional[float] = None
+    risk_level: Optional[str] = None
 
 
 class RegionUpdate(BaseModel):

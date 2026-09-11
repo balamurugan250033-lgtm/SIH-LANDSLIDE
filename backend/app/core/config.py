@@ -13,13 +13,20 @@ class Settings(BaseSettings):
     # WEATHER_API_KEY supports third-party weather providers while preserving
     # compatibility with deployments that already use IMD_API_KEY.
     WEATHER_API_KEY: str = os.getenv("WEATHER_API_KEY", "")
+    WINDY_API_KEY: str = os.getenv("WINDY_API_KEY", "")
     IMD_API_KEY: str = ""
-    IMD_API_URL: str = "https://weather.indianapi.in/india/weather"
+    IMD_API_URL: str = ""
+    IMD_API_BASE_URL: str = ""
+    IMD_API_ENABLED: bool = False
+    MOSDAC_ENABLED: bool = False
+    MOSDAC_API_URL: str = ""
+    MOSDAC_API_KEY: str = ""
     
     # Twilio (SMS)
     TWILIO_ACCOUNT_SID: str = os.getenv("TWILIO_ACCOUNT_SID", "")
     TWILIO_AUTH_TOKEN: str = os.getenv("TWILIO_AUTH_TOKEN", "")
     TWILIO_FROM_NUMBER: str = os.getenv("TWILIO_FROM_NUMBER", "")
+    TWILIO_ALERT_RECIPIENT: str = os.getenv("TWILIO_ALERT_RECIPIENT", "")
 
     # Auth Settings
     SECRET_KEY: str = os.getenv("SECRET_KEY", "sih2026_landslide_secret_key_change_me_in_prod")
@@ -28,6 +35,14 @@ class Settings(BaseSettings):
 
     # Configurable Thresholds
     STALE_DATA_THRESHOLD_MINUTES: int = 120
+    # Live environmental telemetry is retrieved in the background. Open-Meteo
+    # remains the no-key default; configured providers are used as fallbacks.
+    LIVE_INGEST_ENABLED: bool = True
+    LIVE_INGEST_INTERVAL_MINUTES: int = 15
+    # Optional Supabase REST replication for hosted ingestion storage.
+    SUPABASE_URL: str = os.getenv("SUPABASE_URL", "")
+    SUPABASE_PUBLISHABLE_KEY: str = os.getenv("SUPABASE_PUBLISHABLE_KEY", "")
+    SUPABASE_SYNC_ENABLED: bool = False
 
     class Config:
         env_file = ".env"

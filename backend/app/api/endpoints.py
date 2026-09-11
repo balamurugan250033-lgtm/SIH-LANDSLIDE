@@ -10,32 +10,88 @@ from app.core.config import settings
 from app.core.security import verify_password, get_password_hash, create_access_token, get_current_user, require_admin
 from app.services.validation import validate_environmental_data
 from app.services.decision import evaluate_warning_decision
-from app.services.ingestion import fetch_imd_rainfall_data
+from app.services.ingestion import fetch_imd_rainfall_data, fetch_mosdac_data, fetch_openmeteo_data, fetch_windy_data
 from app.services.alerting import alert_service
+from app.services.supabase_sync import sync_ingestion
+from ml.predict import predict as predict_validated_model
+from app.ml.inference import predict_risk_formula
 
 router = APIRouter()
+
+@router.post("/predict", response_model=schemas.PredictionResponse)
+def predict_location(request: schemas.PredictionRequest):
+    prediction = predict_validated_model(request.features)
+    return schemas.PredictionResponse(
+        location_id=request.location_id,
+        prediction_time=datetime.utcnow(),
+        **prediction,
+    )
+
+@router.get("/model/info")
+def model_info():
+    metadata_path = os.path.join(os.path.dirname(__file__), "..", "models", "model_metadata.json")
+    if not os.path.exists(metadata_path):
+        return {"status": "MODEL_UNAVAILABLE", "reason": "No validated historical-event model has been trained"}
+    import json
+    with open(metadata_path, encoding="utf-8") as metadata_file:
+        return json.load(metadata_file)
 
 @router.get("/health", response_model=List[schemas.SourceHealth])
 def check_health(db: Session = Depends(get_db)):
     from app.ml.inference import MODEL_PATH
-    imd_configured = bool(settings.IMD_API_URL and settings.IMD_API_KEY)
-    imd_status = "CONNECTED" if imd_configured else "UNCONFIGURED"
+    imd_configured = bool(settings.IMD_API_ENABLED and (settings.IMD_API_BASE_URL or settings.IMD_API_URL) and settings.IMD_API_KEY)
+    imd_status = "AVAILABLE" if imd_configured else "UNAVAILABLE"
     imd_health = db.query(models.SourceHealth).filter(models.SourceHealth.source_name == "IMD_API").first()
     if not imd_health:
         imd_health = models.SourceHealth(source_name="IMD_API")
         db.add(imd_health)
     imd_health.status = imd_status
-    imd_health.last_sync = datetime.utcnow()
+    if not imd_configured:
+        imd_health.last_sync = None
     ml_configured = os.path.exists(MODEL_PATH)
-    ml_status = "CONNECTED" if ml_configured else "OFFLINE"
+    ml_status = "AVAILABLE" if ml_configured else "UNAVAILABLE"
     ml_health = db.query(models.SourceHealth).filter(models.SourceHealth.source_name == "ML_SERVICE").first()
     if not ml_health:
         ml_health = models.SourceHealth(source_name="ML_SERVICE")
         db.add(ml_health)
     ml_health.status = ml_status
-    ml_health.last_sync = datetime.utcnow()
+    if not ml_configured:
+        ml_health.last_sync = None
+    om_health = db.query(models.SourceHealth).filter(models.SourceHealth.source_name == "OPEN_METEO").first()
+    if not om_health:
+        om_health = models.SourceHealth(source_name="OPEN_METEO")
+        db.add(om_health)
+    # Do not overwrite the actual source status here. It is updated only after
+    # a successful live ingestion, so the UI reports real freshness.
+    if not om_health.status:
+        om_health.status = "UNAVAILABLE"
+    sensor_health = db.query(models.SourceHealth).filter(models.SourceHealth.source_name == "SENSOR_NETWORK").first()
+    if not sensor_health:
+        sensor_health = models.SourceHealth(source_name="SENSOR_NETWORK", status="UNAVAILABLE")
+        db.add(sensor_health)
+    gis_health = db.query(models.SourceHealth).filter(models.SourceHealth.source_name == "GIS").first()
+    if not gis_health:
+        gis_health = models.SourceHealth(source_name="GIS", status="INTEGRATION_PENDING")
+        db.add(gis_health)
+    satellite_health = db.query(models.SourceHealth).filter(models.SourceHealth.source_name == "SATELLITE").first()
+    if not satellite_health:
+        satellite_health = models.SourceHealth(source_name="SATELLITE", status="INTEGRATION_PENDING")
+        db.add(satellite_health)
+    mosdac_health = db.query(models.SourceHealth).filter(models.SourceHealth.source_name == "MOSDAC").first()
+    if not mosdac_health:
+        mosdac_health = models.SourceHealth(source_name="MOSDAC", status="CONNECTED" if settings.MOSDAC_ENABLED else "UNCONFIGURED")
+        db.add(mosdac_health)
+    elif not settings.MOSDAC_ENABLED:
+        mosdac_health.status = "UNCONFIGURED"
+    reports_health = db.query(models.SourceHealth).filter(models.SourceHealth.source_name == "CITIZEN_REPORTS").first()
+    if not reports_health:
+        reports_health = models.SourceHealth(source_name="CITIZEN_REPORTS")
+        db.add(reports_health)
+    latest_report = db.query(models.CitizenReport).order_by(models.CitizenReport.timestamp.desc()).first()
+    reports_health.status = "AVAILABLE" if latest_report else "UNAVAILABLE"
+    reports_health.last_sync = latest_report.timestamp if latest_report else None
     db.commit()
-    return [imd_health, ml_health]
+    return [imd_health, ml_health, om_health, sensor_health, gis_health, satellite_health, mosdac_health, reports_health]
 
 # Auth Endpoints
 @router.post("/auth/register", response_model=schemas.UserResponse)
@@ -101,6 +157,7 @@ def list_admin_regions(admin_user: models.User = Depends(require_admin), db: Ses
     for region in regions:
         obs = db.query(models.Observation).filter(models.Observation.region_id == region.id).order_by(models.Observation.timestamp.desc()).first()
         alert = db.query(models.Alert).filter(models.Alert.region_id == region.id).order_by(models.Alert.timestamp.desc()).first()
+        live_risk = predict_risk_formula({"rainfall_mm": obs.rainfall_mm, "soil_moisture_percent": obs.soil_moisture_percent, "slope_angle": obs.slope_angle}) if obs else None
         result.append({
             "region_id": region.id,
             "name": region.name,
@@ -111,9 +168,42 @@ def list_admin_regions(admin_user: models.User = Depends(require_admin), db: Ses
             "slope_angle": obs.slope_angle if obs else None,
             "vibration": False,
             "alert_message": alert.reason if alert else None,
-            "risk_level": alert.risk_level if alert else "LOW",
+            "risk_score": live_risk["risk_score"] if live_risk else None,
+            "risk_level": live_risk["risk_level"] if live_risk else (alert.risk_level if alert else None),
         })
     return result
+
+@router.get("/admin/regions/{region_id}/risk-trend")
+def get_admin_region_risk_trend(region_id: int, hours: int = 24, admin_user: models.User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Return an explainable risk-score time series from real stored observations."""
+    region = db.query(models.Region).filter(models.Region.id == region_id).first()
+    if not region:
+        raise HTTPException(status_code=404, detail="Region not found")
+    hours = min(max(hours, 1), 168)
+    start = datetime.utcnow() - timedelta(hours=hours)
+    observations = db.query(models.Observation).filter(
+        models.Observation.region_id == region_id,
+        models.Observation.timestamp >= start,
+    ).order_by(models.Observation.timestamp.asc()).all()
+    points = []
+    for observation in observations:
+        formula = predict_risk_formula({
+            "rainfall_mm": observation.rainfall_mm,
+            "soil_moisture_percent": observation.soil_moisture_percent,
+            "slope_angle": observation.slope_angle,
+        })
+        points.append({
+            "timestamp": observation.timestamp.isoformat(),
+            "risk_score": formula["risk_score"],
+            "risk_level": formula["risk_level"],
+            "soil_saturation": observation.soil_moisture_percent,
+            "data_quality_score": observation.data_quality_score,
+        })
+    direction = "INSUFFICIENT_DATA"
+    if len(points) >= 2:
+        delta = points[-1]["risk_score"] - points[0]["risk_score"]
+        direction = "RISING" if delta > 0.03 else "FALLING" if delta < -0.03 else "STABLE"
+    return {"region_id": region_id, "hours": hours, "source": "observed_telemetry", "direction": direction, "points": points}
 
 @router.post("/admin/regions", response_model=schemas.Region)
 def create_region(region: schemas.RegionCreate, admin_user: models.User = Depends(require_admin), db: Session = Depends(get_db)):
@@ -182,6 +272,7 @@ def create_alert(alert_in: schemas.AlertCreate, admin_user: models.User = Depend
         risk_score=None,
         timestamp=datetime.utcnow(),
         reason=alert_in.reason,
+        alert_type=alert_in.alert_type,
         delivery_status="pending",
         delivery_channel="system",
     )
@@ -191,9 +282,19 @@ def create_alert(alert_in: schemas.AlertCreate, admin_user: models.User = Depend
     if alert_in.rainfall_mm is not None or alert_in.soil_saturation is not None:
         obs = db.query(models.Observation).filter(models.Observation.region_id == alert_in.region_id).order_by(models.Observation.timestamp.desc()).first()
         if obs:
-            if alert_in.rainfall_mm is not None: obs.rainfall_mm = alert_in.rainfall_mm
-            if alert_in.soil_saturation is not None: obs.soil_moisture_percent = alert_in.soil_saturation
-            db.commit()
+            if alert_in.rainfall_mm is not None:
+                obs.rainfall_mm = alert_in.rainfall_mm
+                db.commit()
+            if alert_in.soil_saturation is not None:
+                obs.soil_moisture_percent = alert_in.soil_saturation
+                db.commit()
+    try:
+        from app.main import ws_manager
+        import asyncio
+        alert_data = {"type": "new_alert", "data": {"id": db_alert.id, "region_id": db_alert.region_id, "risk_level": db_alert.risk_level, "risk_score": db_alert.risk_score, "reason": db_alert.reason, "timestamp": db_alert.timestamp.isoformat(), "severity": db_alert.risk_level, "alert_type": db_alert.alert_type}}
+        asyncio.create_task(ws_manager.broadcast(alert_data))
+    except:
+        pass
     return db_alert
 
 # Notifications
@@ -209,7 +310,7 @@ def create_and_send_notification(notification_in: schemas.NotificationSend, admi
     db_notification = models.Notification(
         region_id=notification_in.region_id,
         risk_level="MODERATE",
-        title=f"Landslide Alert - {region.name}",
+        title=f"T-MINUS Alert - {region.name}",
         message=notification_in.message,
         language=notification_in.language,
         channel=notification_in.channel.lower(),
@@ -230,6 +331,13 @@ def create_and_send_notification(notification_in: schemas.NotificationSend, admi
     db_notification.delivery_details = f"Delivered via {notification_in.channel}"
     db.commit()
     db.refresh(db_notification)
+    try:
+        from app.main import ws_manager
+        import asyncio
+        notif_data = {"type": "new_notification", "data": {"id": db_notification.id, "region_id": db_notification.region_id, "message": db_notification.message, "channel": db_notification.channel, "created_at": db_notification.created_at.isoformat(), "status": db_notification.status}}
+        asyncio.create_task(ws_manager.broadcast(notif_data))
+    except:
+        pass
     return db_notification
 
 # Citizen Endpoints
@@ -240,6 +348,7 @@ def get_citizen_regions(db: Session = Depends(get_db)):
     for region in regions:
         obs = db.query(models.Observation).filter(models.Observation.region_id == region.id).order_by(models.Observation.timestamp.desc()).first()
         alert = db.query(models.Alert).filter(models.Alert.region_id == region.id).order_by(models.Alert.timestamp.desc()).first()
+        live_risk = predict_risk_formula({"rainfall_mm": obs.rainfall_mm, "soil_moisture_percent": obs.soil_moisture_percent, "slope_angle": obs.slope_angle}) if obs else None
         result.append({
             "region_id": region.id,
             "name": region.name,
@@ -250,9 +359,32 @@ def get_citizen_regions(db: Session = Depends(get_db)):
             "slope_angle": obs.slope_angle if obs else None,
             "vibration": False,
             "alert_message": alert.reason if alert else None,
-            "risk_level": alert.risk_level if alert else "LOW",
+            "risk_score": live_risk["risk_score"] if live_risk else None,
+            "risk_level": live_risk["risk_level"] if live_risk else (alert.risk_level if alert else None),
         })
     return result
+
+@router.get("/citizen/regions/{region_id}/risk-trend")
+def get_citizen_region_risk_trend(region_id: int, hours: int = 24, db: Session = Depends(get_db)):
+    """Public, observed risk history calculated from saved live telemetry."""
+    region = db.query(models.Region).filter(models.Region.id == region_id).first()
+    if not region:
+        raise HTTPException(status_code=404, detail="Region not found")
+    hours = min(max(hours, 1), 168)
+    observations = db.query(models.Observation).filter(
+        models.Observation.region_id == region_id,
+        models.Observation.timestamp >= datetime.utcnow() - timedelta(hours=hours),
+    ).order_by(models.Observation.timestamp.asc()).all()
+    points = [{
+        "timestamp": item.timestamp.isoformat(),
+        "risk_score": item.risk_score if item.risk_score is not None else predict_risk_formula({"rainfall_mm": item.rainfall_mm, "soil_moisture_percent": item.soil_moisture_percent, "slope_angle": item.slope_angle})["risk_score"],
+        "soil_saturation": item.soil_moisture if item.soil_moisture is not None else item.soil_moisture_percent,
+    } for item in observations]
+    direction = "STABLE"
+    if len(points) >= 2:
+        delta = points[-1]["risk_score"] - points[0]["risk_score"]
+        direction = "RISING" if delta > 0.03 else "FALLING" if delta < -0.03 else "STABLE"
+    return {"region_id": region_id, "source": "observed_live_telemetry", "direction": direction, "points": points}
 
 @router.get("/citizen/alerts", response_model=List[schemas.Alert])
 def get_citizen_alerts(region_id: Optional[int] = None, skip: int = 0, limit: int = 50, db: Session = Depends(get_db)):
@@ -280,6 +412,12 @@ def submit_citizen_report(report: schemas.CitizenReportCreate, db: Session = Dep
     db.add(db_report)
     db.commit()
     db.refresh(db_report)
+    try:
+        from app.main import ws_manager
+        import asyncio
+        asyncio.create_task(ws_manager.broadcast({"type": "new_report", "data": {"id": db_report.id, "region_id": db_report.region_id, "hazard_types": db_report.hazard_type.split(", ") if db_report.hazard_type else [], "description": db_report.description, "timestamp": db_report.timestamp.isoformat(), "status": db_report.status}}))
+    except:
+        pass
     return db_report
 
 @router.get("/citizen/notifications", response_model=List[schemas.Notification])
@@ -326,6 +464,7 @@ def create_observation(observation: schemas.ObservationCreate, admin_user: model
     db.add(db_observation)
     db.commit()
     db.refresh(db_observation)
+    sync_ingestion(region, db_observation)
     decision = evaluate_warning_decision(db_observation)
     if decision:
         db_alert = models.Alert(
@@ -342,27 +481,65 @@ def create_observation(observation: schemas.ObservationCreate, admin_user: model
 def trigger_ingest(admin_user: models.User = Depends(require_admin), db: Session = Depends(get_db)):
     regions = db.query(models.Region).all()
     ingested_count = 0
-    check_health(admin_user, db)
+    openmeteo_count = 0
+    check_health(db)
     for region in regions:
-        rainfall_data = fetch_imd_rainfall_data(region.name)
-        if rainfall_data:
+        weather_data = fetch_mosdac_data(region.latitude, region.longitude)
+        # Try Open-Meteo first (free, no API key needed)
+        if not weather_data:
+            weather_data = fetch_openmeteo_data(region.latitude, region.longitude)
+        if weather_data:
+            openmeteo_count += 1
+        if not weather_data:
+            # Try Windy API if configured
+            weather_data = fetch_windy_data(region.latitude, region.longitude)
+        if not weather_data:
+            # Fallback to IMD API if configured
+            rainfall_data = fetch_imd_rainfall_data(region.name)
+            if rainfall_data:
+                prev_obs = db.query(models.Observation).filter(models.Observation.region_id == region.id).order_by(models.Observation.timestamp.desc()).first()
+                prev_moisture = prev_obs.soil_moisture_percent if prev_obs else 35.0
+                prev_slope = prev_obs.slope_angle if prev_obs else 25.0
+                weather_data = {
+                    "rainfall_mm": rainfall_data.get("rainfall_mm", 0.0),
+                    "soil_moisture_percent": prev_moisture,
+                    "soil_temperature": None
+                }
+        if weather_data:
             prev_obs = db.query(models.Observation).filter(models.Observation.region_id == region.id).order_by(models.Observation.timestamp.desc()).first()
-            prev_moisture = prev_obs.soil_moisture_percent if prev_obs else 35.0
             prev_slope = prev_obs.slope_angle if prev_obs else 25.0
             data_dict = {
-                "region_id": region.id, "rainfall_mm": rainfall_data.get("rainfall_mm", 0.0),
-                "soil_moisture_percent": prev_moisture, "slope_angle": prev_slope, "timestamp": datetime.utcnow()
+                "region_id": region.id,
+                "rainfall_mm": weather_data.get("rainfall_mm", 0.0),
+                "soil_moisture_percent": weather_data.get("soil_moisture_percent", prev_obs.soil_moisture_percent if prev_obs else 35.0),
+                "slope_angle": prev_slope,
+                "rainfall_24h": weather_data.get("rainfall_mm"),
+                "rainfall_72h": weather_data.get("rainfall_72h"),
+                "soil_moisture": weather_data.get("soil_moisture_percent"),
+                "elevation": weather_data.get("elevation"),
+                "slope": weather_data.get("slope_angle"),
+                "soil_type": weather_data.get("soil_type"),
+                "geology": weather_data.get("geology"),
+                "previous_landslide": weather_data.get("previous_landslide"),
+                "temperature": weather_data.get("temperature", weather_data.get("soil_temperature")),
+                "timestamp": datetime.utcnow()
             }
             validation_res = validate_environmental_data(data_dict)
             if validation_res["is_valid"]:
+                decision_preview = predict_risk_formula(data_dict)
                 db_observation = models.Observation(
                     region_id=region.id, timestamp=data_dict["timestamp"], rainfall_mm=data_dict["rainfall_mm"],
                     soil_moisture_percent=data_dict["soil_moisture_percent"], slope_angle=data_dict["slope_angle"],
+                    rainfall_24h=data_dict["rainfall_24h"], rainfall_72h=data_dict["rainfall_72h"],
+                    soil_moisture=data_dict["soil_moisture"], elevation=data_dict["elevation"], slope=data_dict["slope"],
+                    soil_type=data_dict["soil_type"], geology=data_dict["geology"], previous_landslide=data_dict["previous_landslide"],
+                    temperature=data_dict["temperature"], risk_score=decision_preview["risk_score"], risk_level=decision_preview["risk_level"],
                     is_stale=validation_res["is_stale"], data_quality_score=validation_res["data_quality_score"]
                 )
                 db.add(db_observation)
                 db.commit()
                 db.refresh(db_observation)
+                sync_ingestion(region, db_observation)
                 decision = evaluate_warning_decision(db_observation)
                 if decision:
                     db_alert = models.Alert(
@@ -374,7 +551,14 @@ def trigger_ingest(admin_user: models.User = Depends(require_admin), db: Session
                     db.refresh(db_alert)
                     alert_service.dispatch_alert_sms(db, db_alert, region.name)
                 ingested_count += 1
-    return {"message": f"Ingestion process completed. Ingested data for {ingested_count} regions."}
+    openmeteo_health = db.query(models.SourceHealth).filter(models.SourceHealth.source_name == "OPEN_METEO").first()
+    if not openmeteo_health:
+        openmeteo_health = models.SourceHealth(source_name="OPEN_METEO")
+        db.add(openmeteo_health)
+    openmeteo_health.status = "AVAILABLE" if openmeteo_count else "UNAVAILABLE"
+    openmeteo_health.last_sync = datetime.utcnow() if openmeteo_count else openmeteo_health.last_sync
+    db.commit()
+    return {"message": f"Ingestion process completed. Ingested real-time weather data for {ingested_count} regions."}
 
 # Reports (admin)
 @router.get("/reports", response_model=List[schemas.CitizenReport])

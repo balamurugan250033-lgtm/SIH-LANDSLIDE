@@ -2,13 +2,37 @@
 
 An offline-capable, multi-platform landslide monitoring and alerting system for the North-Eastern Region of India. The platform combines machine-learning risk assessment, citizen reporting, GIS views, official alert dispatch, and mobile mesh relay for low-connectivity environments.
 
-## Product Photos
+## Product Screenshots
 
-### Citizen safety platform
+### Citizen Platform — Home & Regions
 
-![Citizen safety platform](docs/screenshots/citizen-platform.png)
+![Citizen Platform Home](docs/screenshots/citizen-platform.png)
 
-### Landslide Sentinel app mark
+### Citizen Platform — GIS Map
+
+![Citizen Map](docs/screenshots/citizen-map.png)
+
+### Citizen Platform — Alerts
+
+![Citizen Alerts](docs/screenshots/citizen-alerts.png)
+
+### Citizen Platform — Submit Report
+
+![Citizen Report](docs/screenshots/citizen-report.png)
+
+### Admin Dashboard
+
+![Admin Dashboard](docs/screenshots/admin-dashboard.png)
+
+### Admin — Alert Management
+
+![Admin Alerts](docs/screenshots/admin-alerts.png)
+
+### Admin — Notification Center
+
+![Admin Notifications](docs/screenshots/admin-notifications.png)
+
+### Landslide Sentinel App Mark
 
 ![Landslide Sentinel app mark](web/src/assets/hero.png)
 
@@ -33,7 +57,7 @@ The complete project report describes the problem, solution architecture, data f
 
 - [Open the complete project report](PROJECT_REPORT.html)
 - [Offline QA checklist](OFFLINE_QA_CHECKLIST.md)
-- [Smart India Hackathon presentation](SIH2026-IDEA-Presentation-Landslide-NER-UPDATED.pptx)
+- [Enhanced Smart India Hackathon presentation](SIH2026-IDEA-Presentation-Landslide-NER-ENHANCED.pptx)
 
 ### Report at a glance
 
@@ -99,6 +123,19 @@ npm install
 npm run dev -- --host 127.0.0.1 --port 5174
 ```
 
+### Deploy both web apps to Vercel
+
+Create two Vercel projects from this repository:
+
+| Project | Vercel Root Directory | Build command | Output directory |
+| --- | --- | --- | --- |
+| Citizen portal | `web-citizen` | `npm run build` | `dist` |
+| Admin dashboard | `web-admin` | `npm run build` | `dist` |
+
+Set `VITE_API_URL` in each Vercel project to the deployed backend URL ending in `/api/v1`, for example `https://api.example.com/api/v1`. Do not use `localhost` in Vercel environment variables. Add the variable for Preview and Production, then redeploy after changing it.
+
+The backend must be deployed separately because Vercel is hosting the two static Vite frontends. Configure CORS on the backend to allow both Vercel domains.
+
 ### Mobile App
 
 ```powershell
@@ -111,7 +148,11 @@ For a debug Android APK, see [`mobile/BUILD_APK.md`](mobile/BUILD_APK.md).
 
 ## API and Configuration Notes
 
-The web clients currently expect the backend at `http://192.168.1.5:8000/api/v1`; update the client API constant for a different host or local-only setup. Local databases, environment files, virtual environments, dependency folders, caches, and build output are excluded by `.gitignore`.
+The web clients use Vite's dev-server proxy (`/api/v1` → `http://127.0.0.1:8000`) for local development. The mobile app connects to the backend at `http://10.229.128.155:8000/api/v1`; update `mobile/src/services/api.js` for a different host. Local databases, environment files, virtual environments, dependency folders, caches, and build output are excluded by `.gitignore`.
+
+### Supabase ingestion storage
+
+The backend can store live weather, sensor, alerts, and citizen-report ingestion records in Supabase PostgreSQL. Copy the Supabase database URI from **Supabase Dashboard → Connect → URI** into `backend/.env` as `DATABASE_URL`, using the `postgresql+psycopg2://` prefix. Install backend requirements and restart FastAPI; its schema setup creates the required tables automatically. Keep the URI only in `.env`—never in mobile/web code or source control.
 
 ## Technology Stack
 
