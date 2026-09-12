@@ -45,7 +45,8 @@ class Observation(ObservationBase):
 
 class CitizenReportCreate(BaseModel):
     region_id: int
-    hazard_types: List[str] = Field(min_length=1, max_length=10)
+    hazard_types: Optional[List[str]] = None
+    hazard_type: Optional[str] = None
     description: str = Field(min_length=3, max_length=500)
     latitude: Optional[float] = None
     longitude: Optional[float] = None
@@ -53,9 +54,36 @@ class CitizenReportCreate(BaseModel):
     media_path: Optional[str] = None
     media_content_type: Optional[str] = None
 
+    @model_validator(mode='before')
+    @classmethod
+    def normalize_hazards(cls, data):
+        if isinstance(data, dict):
+            # Coerce region_id to int if given as string
+            if 'region_id' in data and data['region_id'] is not None:
+                try:
+                    data['region_id'] = int(data['region_id'])
+                except (ValueError, TypeError):
+                    pass
+            if 'hazard_types' not in data and 'hazard_type' in data:
+                ht = data['hazard_type']
+                if isinstance(ht, str):
+                    data['hazard_types'] = [h.strip() for h in ht.split(',') if h.strip()]
+                elif isinstance(ht, list):
+                    data['hazard_types'] = ht
+            elif 'hazard_types' in data and not data.get('hazard_type'):
+                ht = data['hazard_types']
+                if isinstance(ht, list):
+                    data['hazard_type'] = ', '.join(ht)
+        return data
+
+class CitizenReportUpdate(BaseModel):
+    status: str # Submitted, Under Review, Validated, Rejected
+
 class CitizenReport(BaseModel):
     id: int
     region_id: int
+    region_name: Optional[str] = None
+    hazard_type: Optional[str] = None
     hazard_types: List[str] = []
     description: str
     latitude: Optional[float] = None
@@ -75,9 +103,13 @@ class CitizenReport(BaseModel):
         if isinstance(data, dict):
             return data
         hazard_type_str = getattr(data, 'hazard_type', '') or ''
+        region_obj = getattr(data, 'region', None)
+        region_name = region_obj.name if region_obj else None
         data_dict = {
             'id': getattr(data, 'id', None),
             'region_id': getattr(data, 'region_id', None),
+            'region_name': region_name,
+            'hazard_type': hazard_type_str,
             'hazard_types': [h.strip() for h in hazard_type_str.split(',') if h.strip()],
             'description': getattr(data, 'description', ''),
             'latitude': getattr(data, 'latitude', None),
@@ -86,7 +118,7 @@ class CitizenReport(BaseModel):
             'media_path': getattr(data, 'media_path', None),
             'media_content_type': getattr(data, 'media_content_type', None),
             'timestamp': getattr(data, 'timestamp', None),
-            'status': getattr(data, 'status', ''),
+            'status': getattr(data, 'status', 'Submitted'),
         }
         return data_dict
 
@@ -226,6 +258,7 @@ class AdminStats(BaseModel):
     total_regions: int
     total_alerts: int
     total_notifications: int
+    total_reports: Optional[int] = 0
     active_users: int
 
 

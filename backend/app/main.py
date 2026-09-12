@@ -2,6 +2,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Set
 from app.core.config import settings
+from app.models import models  # Ensures all models register with Base metadata
 from app.api import endpoints
 from app.database import engine, Base, seed_data, migrate_schema, SessionLocal
 

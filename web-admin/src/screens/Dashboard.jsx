@@ -22,7 +22,7 @@ function formatAlertTime(alert) {
   return new Date(value).toLocaleString();
 }
 
-export default function Dashboard({ stats: initialStats, regions = [], alerts = [], notifications = [], setActiveTab }) {
+export default function Dashboard({ stats: initialStats, regions = [], alerts = [], notifications = [], reports = [], setActiveTab }) {
   const [stats, setStats] = useState(initialStats);
 
   useEffect(() => {
@@ -36,6 +36,7 @@ export default function Dashboard({ stats: initialStats, regions = [], alerts = 
     total_alerts: alerts.length,
     critical_alerts: criticalCount,
     total_notifications: notifications.length,
+    total_reports: reports.length,
     active_users: null,
   };
 
@@ -44,18 +45,18 @@ export default function Dashboard({ stats: initialStats, regions = [], alerts = 
   return (
     <div>
       <div className="stats-grid">
-        <div className="stat-card">
+        <div className="stat-card" style={{ cursor: 'pointer' }} onClick={() => setActiveTab('regions')}>
           <div className="stat-header">
             <div className="stat-icon" style={{ background: '#EFF6FF', color: '#2563EB' }}>
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
             </div>
-            <span className="stat-change stat-up">Active</span>
+            <span className="stat-change stat-up">Monitored</span>
           </div>
           <div className="stat-value">{displayStats.total_regions || regions.length}</div>
-          <div className="stat-label">Monitored NER Regions</div>
+          <div className="stat-label">NER Regions</div>
         </div>
 
-        <div className="stat-card">
+        <div className="stat-card" style={{ cursor: 'pointer' }} onClick={() => setActiveTab('alerts')}>
           <div className="stat-header">
             <div className="stat-icon" style={{ background: '#FEF2F2', color: '#DC2626' }}>
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
@@ -65,29 +66,29 @@ export default function Dashboard({ stats: initialStats, regions = [], alerts = 
             </span>
           </div>
           <div className="stat-value">{displayStats.total_alerts || alerts.length}</div>
-          <div className="stat-label">Active Warning Alerts</div>
+          <div className="stat-label">Active Warnings</div>
         </div>
 
-        <div className="stat-card">
+        <div className="stat-card" style={{ cursor: 'pointer' }} onClick={() => setActiveTab('reports')}>
+          <div className="stat-header">
+            <div className="stat-icon" style={{ background: '#F0FDF4', color: '#16A34A' }}>
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>
+            </div>
+            <span className="stat-change stat-up" style={{ background: '#DCFCE7', color: '#16A34A' }}>Ground Intel</span>
+          </div>
+          <div className="stat-value">{displayStats.total_reports || reports.length}</div>
+          <div className="stat-label">Citizen Reports</div>
+        </div>
+
+        <div className="stat-card" style={{ cursor: 'pointer' }} onClick={() => setActiveTab('notifications')}>
           <div className="stat-header">
             <div className="stat-icon" style={{ background: '#FFFBEB', color: '#D97706' }}>
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
             </div>
-            <span className="stat-change stat-up">Multi-Channel</span>
+            <span className="stat-change stat-up">Broadcasts</span>
           </div>
           <div className="stat-value">{displayStats.total_notifications || notifications.length}</div>
-          <div className="stat-label">Broadcast Bulletins</div>
-        </div>
-
-        <div className="stat-card">
-          <div className="stat-header">
-            <div className="stat-icon" style={{ background: '#F0FDF4', color: '#16A34A' }}>
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-            </div>
-            <span className="stat-change stat-up" style={{ background: '#DCFCE7', color: '#16A34A' }}>Connected</span>
-          </div>
-          <div className="stat-value">{displayStats.active_users ?? '--'}</div>
-          <div className="stat-label">Connected recipients</div>
+          <div className="stat-label">Dispatches</div>
         </div>
       </div>
 
@@ -152,6 +153,68 @@ export default function Dashboard({ stats: initialStats, regions = [], alerts = 
         </div>
       </div>
 
+      {reports.length > 0 && (
+        <div className="table-panel" style={{ marginBottom: '2rem' }}>
+          <div className="table-header">
+            <h3 className="table-title">Recent Citizen Incident Reports</h3>
+            <button
+              onClick={() => setActiveTab('reports')}
+              style={{
+                background: 'var(--primary-color, #2563EB)',
+                color: 'white',
+                border: 'none',
+                padding: '4px 12px',
+                borderRadius: '6px',
+                fontSize: '0.8rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              View All Reports ({reports.length}) →
+            </button>
+          </div>
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Report ID</th>
+                <th>Region</th>
+                <th>Hazard Type</th>
+                <th>Description</th>
+                <th>Status</th>
+                <th>Reported At</th>
+              </tr>
+            </thead>
+            <tbody>
+              {reports.slice(0, 5).map(rep => {
+                const reg = regions.find(r => r.region_id === rep.region_id || r.id === rep.region_id);
+                const hazards = rep.hazard_types?.length ? rep.hazard_types.join(', ') : (rep.hazard_type || 'General');
+                return (
+                  <tr key={rep.id}>
+                    <td style={{ fontWeight: 700, color: 'var(--primary-color)' }}>#REP-{rep.id}</td>
+                    <td style={{ fontWeight: 600 }}>{reg ? reg.name : `Region #${rep.region_id}`}</td>
+                    <td><span className="badge" style={{ background: '#F1F5F9', color: '#334155' }}>{hazards}</span></td>
+                    <td style={{ maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{rep.description}</td>
+                    <td>
+                      <span
+                        className="badge"
+                        style={{
+                          background: rep.status === 'Validated' ? '#DCFCE7' : rep.status === 'Under Review' ? '#FEF3C7' : '#EFF6FF',
+                          color: rep.status === 'Validated' ? '#166534' : rep.status === 'Under Review' ? '#92400E' : '#1E40AF',
+                          fontWeight: 700,
+                        }}
+                      >
+                        {rep.status || 'Submitted'}
+                      </span>
+                    </td>
+                    <td style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{formatAlertTime(rep)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
       <div className="ops-overview-grid">
         <section className="ops-panel">
           <div className="ops-panel-head">
@@ -162,7 +225,7 @@ export default function Dashboard({ stats: initialStats, regions = [], alerts = 
             <div><strong>--</strong><span>Teams deployed</span></div>
             <div><strong>--</strong><span>Roads closed</span></div>
             <div><strong>{highRiskRegions.length || 0}</strong><span>High-risk regions</span></div>
-            <div><strong>--</strong><span>Evacuation centers</span></div>
+            <div><strong>{reports.length || 0}</strong><span>Citizen reports</span></div>
             <div><strong>--</strong><span>Sensors offline</span></div>
           </div>
           <div className="ops-pipeline">

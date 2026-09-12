@@ -1,6 +1,11 @@
 import axios from 'axios';
 
-const API_URL = (import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || '/api/v1').replace(/\/$/, '');
+const RENDER_API_URL = 'https://sih-landslide-yuc9.onrender.com/api/v1';
+const API_URL = (
+  import.meta.env.VITE_API_URL ||
+  import.meta.env.VITE_API_BASE_URL ||
+  (import.meta.env.DEV ? '/api/v1' : RENDER_API_URL)
+).replace(/\/$/, '');
 
 export const api = axios.create({
   baseURL: API_URL,

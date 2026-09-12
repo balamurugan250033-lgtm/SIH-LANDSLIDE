@@ -8,6 +8,7 @@ The mobile app is a functional **Expo React Native** prototype with all requeste
 - SEVERE risk tier
 - Camera capture + auto-geotag reporting
 - Offline caching and queuing
+- Wi-Fi Direct peer discovery and local-socket relay (Android native build)
 
 However, **Expo Go** does not support custom native modules like Google Nearby Connections. To build an installable APK with mesh relay, you must convert to the **bare workflow**.
 
@@ -161,8 +162,8 @@ adb install -r android/app/build/outputs/apk/debug/app-debug.apk
 ## Testing Mesh Relay
 
 1. **Phone A**: Open app, ensure it has a cached alert (simulate by going offline, or use admin web to issue an alert).
-2. **Phone B**: Install same APK, ensure no internet (airplane mode + BT/WiFi on).
-3. **Both phones**: Keep app in foreground. The mesh service broadcasts cached alerts every 30 seconds.
+2. **Phone B**: Install same APK, ensure no internet (airplane mode + Bluetooth/Wi-Fi on).
+3. **Both phones**: Keep app in foreground, open **Mesh**, and tap **Start Wi-Fi Direct Mesh**. Accept Android's Wi-Fi Direct/nearby-device permission prompts. The app discovers peers and forms a local Wi-Fi Direct group; it does not require an internet router or mobile data.
 4. **Bring phones within ~5-10 meters**: Phone B should receive the alert within seconds, show "Received via mesh" tag, and auto-rebroadcast if TTL > 0.
 5. **Phone A (with internet later)**: When connectivity returns, mesh alerts are POSTed to backend via `meshService.postMeshAlertsToBackend()`.
 

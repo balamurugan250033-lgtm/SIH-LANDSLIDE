@@ -63,7 +63,7 @@ export default function App() {
     };
 
     bootstrap();
-    return () => meshService.stopAdvertising();
+    return () => { meshService.stopAdvertising(); meshService.stopWifiDirect(); };
   }, []);
 
   // Background Sync Routine: on app foreground or reconnect
@@ -77,10 +77,12 @@ export default function App() {
         if (!isOnline) {
           meshService.startAdvertising();
           meshService.startDiscovery();
+          meshService.startWifiDirect();
         }
       } else {
         meshService.stopAdvertising();
         meshService.stopDiscovery();
+        meshService.stopWifiDirect();
       }
     });
     return () => subscription.remove();

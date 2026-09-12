@@ -1,14 +1,15 @@
 import { useState } from 'react';
-import { BarChart3, Map, TriangleAlert, Megaphone, LogOut } from 'lucide-react';
+import { BarChart3, Map, TriangleAlert, Megaphone, ClipboardList, LogOut } from 'lucide-react';
 
 const NAV = [
   { id: 'dashboard', label: 'Dashboard', icon: BarChart3 },
   { id: 'regions', label: 'Regions', icon: Map },
   { id: 'alerts', label: 'Alerts', icon: TriangleAlert },
+  { id: 'reports', label: 'Citizen Reports', icon: ClipboardList },
   { id: 'notifications', label: 'Notifications', icon: Megaphone },
 ];
 
-export default function Sidebar({ activeTab, setActiveTab, onLogout }) {
+export default function Sidebar({ activeTab, setActiveTab, onLogout, reportCount = 0 }) {
   return (
     <aside className="sidebar">
       <div className="sidebar-header">
@@ -25,6 +26,21 @@ export default function Sidebar({ activeTab, setActiveTab, onLogout }) {
           <button key={item.id} className={`sidebar-link ${activeTab === item.id ? 'active' : ''}`} onClick={() => setActiveTab(item.id)}>
             <item.icon size={18} strokeWidth={2} />
             <span>{item.label}</span>
+            {item.id === 'reports' && reportCount > 0 && (
+              <span
+                style={{
+                  marginLeft: 'auto',
+                  background: 'var(--primary-color, #2563EB)',
+                  color: 'white',
+                  borderRadius: '10px',
+                  padding: '1px 6px',
+                  fontSize: '0.7rem',
+                  fontWeight: 700,
+                }}
+              >
+                {reportCount}
+              </span>
+            )}
           </button>
         ))}
       </nav>

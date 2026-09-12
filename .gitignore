@@ -31,6 +31,11 @@ backend/landslide.db
 backend/.env
 mobile/.env
 
+# Logs
+*.log
+mobile/.gradle-user/
+
 # OS system files
 .DS_Store
 Thumbs.db
+SIH LANSLIDE/

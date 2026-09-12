@@ -136,16 +136,18 @@ def admin_login(credentials: schemas.AdminLogin, db: Session = Depends(get_db)):
 
 # ==================== ADMIN ENDPOINTS ====================
 
-@router.get("/admin/stats")
+@router.get("/admin/stats", response_model=schemas.AdminStats)
 def get_admin_stats(admin_user: models.User = Depends(require_admin), db: Session = Depends(get_db)):
     total_regions = db.query(models.Region).count()
     total_alerts = db.query(models.Alert).count()
     total_notifications = db.query(models.Notification).count()
+    total_reports = db.query(models.CitizenReport).count()
     active_users = db.query(models.User).filter(models.User.role == "citizen").count()
     return {
         "total_regions": total_regions,
         "total_alerts": total_alerts,
         "total_notifications": total_notifications,
+        "total_reports": total_reports,
         "active_users": active_users,
     }
 
@@ -397,13 +399,15 @@ def get_citizen_alerts(region_id: Optional[int] = None, skip: int = 0, limit: in
 def submit_citizen_report(report: schemas.CitizenReportCreate, db: Session = Depends(get_db)):
     region = db.query(models.Region).filter(models.Region.id == report.region_id).first()
     if not region:
-        raise HTTPException(status_code=404, detail="Region not found")
+        raise HTTPException(status_code=404, detail=f"Region {report.region_id} not found")
+    
+    hazard_str = ", ".join(report.hazard_types) if report.hazard_types else (report.hazard_type or "General Hazard")
     db_report = models.CitizenReport(
         region_id=report.region_id,
-        hazard_type=", ".join(report.hazard_types),
+        hazard_type=hazard_str,
         description=report.description,
-        latitude=report.latitude,
-        longitude=report.longitude,
+        latitude=report.latitude if report.latitude is not None else region.latitude,
+        longitude=report.longitude if report.longitude is not None else region.longitude,
         media_path=report.photo_url or report.media_path,
         media_content_type=report.media_content_type,
         status="Submitted",
@@ -419,6 +423,13 @@ def submit_citizen_report(report: schemas.CitizenReportCreate, db: Session = Dep
     except:
         pass
     return db_report
+
+@router.get("/citizen/reports", response_model=List[schemas.CitizenReport])
+def get_citizen_reports(region_id: Optional[int] = None, skip: int = 0, limit: int = 50, db: Session = Depends(get_db)):
+    query = db.query(models.CitizenReport)
+    if region_id:
+        query = query.filter(models.CitizenReport.region_id == region_id)
+    return query.order_by(models.CitizenReport.timestamp.desc()).offset(skip).limit(limit).all()
 
 @router.get("/citizen/notifications", response_model=List[schemas.Notification])
 def get_citizen_notifications(region_id: Optional[int] = None, skip: int = 0, limit: int = 50, db: Session = Depends(get_db)):
@@ -561,9 +572,31 @@ def trigger_ingest(admin_user: models.User = Depends(require_admin), db: Session
     return {"message": f"Ingestion process completed. Ingested real-time weather data for {ingested_count} regions."}
 
 # Reports (admin)
+@router.get("/admin/reports", response_model=List[schemas.CitizenReport])
 @router.get("/reports", response_model=List[schemas.CitizenReport])
 def read_reports(admin_user: models.User = Depends(require_admin), skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     return db.query(models.CitizenReport).order_by(models.CitizenReport.timestamp.desc()).offset(skip).limit(limit).all()
+
+@router.put("/admin/reports/{report_id}", response_model=schemas.CitizenReport)
+@router.patch("/admin/reports/{report_id}", response_model=schemas.CitizenReport)
+def update_report_status(report_id: int, update: schemas.CitizenReportUpdate, admin_user: models.User = Depends(require_admin), db: Session = Depends(get_db)):
+    report = db.query(models.CitizenReport).filter(models.CitizenReport.id == report_id).first()
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+    if update.status:
+        report.status = update.status
+    db.commit()
+    db.refresh(report)
+    return report
+
+@router.delete("/admin/reports/{report_id}")
+def delete_report(report_id: int, admin_user: models.User = Depends(require_admin), db: Session = Depends(get_db)):
+    report = db.query(models.CitizenReport).filter(models.CitizenReport.id == report_id).first()
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+    db.delete(report)
+    db.commit()
+    return {"message": "Report deleted"}
 
 # Alerts (public)
 @router.get("/alerts", response_model=List[schemas.Alert])

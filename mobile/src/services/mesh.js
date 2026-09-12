@@ -11,6 +11,9 @@ class MeshService {
     this.seenCache = new Set();
     this.isAdvertising = false;
     this.nativeModule = null;
+    this.wifiDirectModule = null;
+    this.wifiDirectStatus = 'UNAVAILABLE';
+    this.wifiDirectPeers = [];
     this.messageListeners = [];
     this.subscription = null;
   }
@@ -23,12 +26,19 @@ class MeshService {
   }
 
   async requestPermissions() {
-    if (Platform.OS !== 'android' || Platform.Version < 31) return true;
-    const result = await PermissionsAndroid.requestMultiple([
+    if (Platform.OS !== 'android') return true;
+    const permissions = [
+      PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+    ];
+    if (Platform.Version >= 31) permissions.push(
       PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
       PermissionsAndroid.PERMISSIONS.BLUETOOTH_ADVERTISE,
       PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
-    ]);
+    );
+    if (Platform.Version >= 33 && PermissionsAndroid.PERMISSIONS.NEARBY_WIFI_DEVICES) {
+      permissions.push(PermissionsAndroid.PERMISSIONS.NEARBY_WIFI_DEVICES);
+    }
+    const result = await PermissionsAndroid.requestMultiple(permissions);
     return Object.values(result).every((value) => value === PermissionsAndroid.RESULTS.GRANTED);
   }
 
@@ -36,6 +46,7 @@ class MeshService {
     if (Platform.OS !== 'android') return;
     try {
       this.nativeModule = NativeModules.NearbyConnectionsModule;
+      this.wifiDirectModule = NativeModules.WifiDirectModule;
     } catch (e) {
       console.warn('Nearby Connections module not loaded. Mesh relay requires a bare workflow Android build.', e);
     }
@@ -51,6 +62,8 @@ class MeshService {
         }
       });
     });
+    DeviceEventEmitter.addListener('onWifiDirectStatus', (status) => { this.wifiDirectStatus = status; });
+    DeviceEventEmitter.addListener('onWifiDirectPeers', (peers) => { this.wifiDirectPeers = Array.isArray(peers) ? peers : []; });
   }
 
   addMessageListener(cb) {
@@ -174,6 +187,21 @@ class MeshService {
     }
   }
 
+  startWifiDirect() {
+    if (!this.wifiDirectModule) return Promise.resolve(false);
+    return this.wifiDirectModule.start().catch((e) => {
+      console.warn('Failed to start Wi-Fi Direct', e);
+      this.wifiDirectStatus = 'ERROR';
+      return false;
+    });
+  }
+
+  stopWifiDirect() {
+    if (!this.wifiDirectModule) return;
+    this.wifiDirectModule.stop().catch((e) => console.warn('Failed to stop Wi-Fi Direct', e));
+    this.wifiDirectStatus = 'STOPPED';
+  }
+
   stopDiscovery() {
     if (!this.nativeModule) return;
     try {
@@ -206,9 +234,16 @@ class MeshService {
   }
 
   relayMessage(message) {
-    if (!this.nativeModule) return;
+    if (!this.nativeModule && !this.wifiDirectModule) return;
     try {
-      this.nativeModule.sendMessage(JSON.stringify(message));
+      const serialized = JSON.stringify(message);
+      // Wi-Fi Direct is preferred for its longer, higher-throughput local link;
+      // Nearby remains a practical Bluetooth-capable fallback.
+      if (this.wifiDirectStatus === 'CONNECTED' || this.wifiDirectStatus === 'GROUP_OWNER') {
+        this.wifiDirectModule.sendMessage(serialized).catch(() => this.nativeModule?.sendMessage(serialized));
+      } else {
+        this.nativeModule?.sendMessage(serialized);
+      }
     } catch (e) {
       console.warn('Failed to relay mesh message', e);
     }

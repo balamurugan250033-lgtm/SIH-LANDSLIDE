@@ -14,9 +14,9 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
 def migrate_schema():
-    """Apply the additive migrations needed by the prototype's SQLite DB."""
-    inspector = inspect(engine)
+    """Apply the additive migrations needed by the prototype's DB."""
     with engine.begin() as connection:
+        inspector = inspect(connection)
         table_names = inspector.get_table_names()
         
         if "users" in table_names:

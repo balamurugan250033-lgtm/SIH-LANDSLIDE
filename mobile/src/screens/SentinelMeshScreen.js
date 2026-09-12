@@ -7,15 +7,18 @@ import { meshService } from '../services/mesh';
 export default function SentinelMeshScreen({ isOnline }) {
   const [nodeId, setNodeId] = useState('Loading node identity...');
   const [pending, setPending] = useState(0);
-  const [meshState, setMeshState] = useState({ nativeAvailable: false, advertising: false, discovering: false });
+  const [meshState, setMeshState] = useState({ nativeAvailable: false, wifiDirectAvailable: false, advertising: false, discovering: false, wifiStatus: 'UNAVAILABLE', wifiPeers: 0 });
 
   const refresh = async () => {
     setNodeId(await getNodeId());
     setPending((await getPendingMeshMessages()).length);
     setMeshState({
       nativeAvailable: Boolean(meshService.nativeModule),
+      wifiDirectAvailable: Boolean(meshService.wifiDirectModule),
       advertising: meshService.isAdvertising,
       discovering: Boolean(meshService.nativeModule),
+      wifiStatus: meshService.wifiDirectStatus,
+      wifiPeers: meshService.wifiDirectPeers.length,
     });
   };
 
@@ -31,14 +34,15 @@ export default function SentinelMeshScreen({ isOnline }) {
     if (meshService.nativeModule) {
       meshService.startAdvertising();
       meshService.startDiscovery();
+      await meshService.startWifiDirect();
     }
     await refresh();
   };
 
   return <ScrollView contentContainerStyle={styles.container}>
     <View style={styles.header}><View><Text style={styles.eyebrow}>OFFLINE EMERGENCY NETWORK</Text><Text style={styles.title}>SentinelMesh</Text><Text style={styles.subtitle}>Store-and-forward emergency communication over nearby Android devices.</Text></View><Feather name="radio" size={28} color="#2563EB" /></View>
-    <View style={styles.statusCard}><View style={styles.statusRow}><View style={[styles.dot, { backgroundColor: meshState.nativeAvailable ? '#16A34A' : '#D97706' }]} /><Text style={styles.statusTitle}>{meshState.nativeAvailable ? 'BLE MODULE AVAILABLE' : 'INTEGRATION UNAVAILABLE'}</Text></View><Text style={styles.statusText}>{meshState.nativeAvailable ? 'Nearby Connections native module is available. Actual discovery begins only after permissions and Bluetooth are granted.' : 'Install the native Android build with the SentinelMesh module to enable nearby relay. No mesh connection is claimed.'}</Text><TouchableOpacity style={styles.primaryButton} onPress={startMesh}><Feather name="radio" size={16} color="#FFFFFF" /><Text style={styles.primaryText}>{meshState.nativeAvailable ? 'START SENTINELMESH' : 'CHECK NATIVE MODULE'}</Text></TouchableOpacity></View>
-    <View style={styles.grid}><Metric label="Internet" value={isOnline ? 'AVAILABLE' : 'OFFLINE'} tone={isOnline ? '#15803D' : '#B91C1C'} /><Metric label="Bluetooth mesh" value={meshState.advertising ? 'ACTIVE' : 'NOT ACTIVE'} tone={meshState.advertising ? '#15803D' : '#64748B'} /><Metric label="Nearby nodes" value="--" tone="#64748B" /><Metric label="Gateway" value="NOT CONNECTED" tone="#64748B" /></View>
+    <View style={styles.statusCard}><View style={styles.statusRow}><View style={[styles.dot, { backgroundColor: meshState.nativeAvailable || meshState.wifiDirectAvailable ? '#16A34A' : '#D97706' }]} /><Text style={styles.statusTitle}>{meshState.wifiDirectAvailable ? 'WI-FI DIRECT READY' : (meshState.nativeAvailable ? 'NEARBY MODULE AVAILABLE' : 'INTEGRATION UNAVAILABLE')}</Text></View><Text style={styles.statusText}>{meshState.wifiDirectAvailable ? 'Wi-Fi Direct discovers nearby Android devices and creates a local emergency link without mobile data or an access point. Nearby Connections remains available as a fallback.' : 'Install the native Android build with the SentinelMesh module to enable nearby relay. No mesh connection is claimed.'}</Text><TouchableOpacity style={styles.primaryButton} onPress={startMesh}><Feather name="wifi" size={16} color="#FFFFFF" /><Text style={styles.primaryText}>{meshState.wifiDirectAvailable ? 'START WI-FI DIRECT MESH' : 'CHECK NATIVE MODULE'}</Text></TouchableOpacity></View>
+    <View style={styles.grid}><Metric label="Internet" value={isOnline ? 'AVAILABLE' : 'OFFLINE'} tone={isOnline ? '#15803D' : '#B91C1C'} /><Metric label="Bluetooth mesh" value={meshState.advertising ? 'ACTIVE' : 'NOT ACTIVE'} tone={meshState.advertising ? '#15803D' : '#64748B'} /><Metric label="Wi-Fi Direct" value={meshState.wifiStatus.replace('_', ' ')} tone={['CONNECTED', 'GROUP_OWNER'].includes(meshState.wifiStatus) ? '#15803D' : '#64748B'} /><Metric label="Wi-Fi peers" value={String(meshState.wifiPeers)} tone={meshState.wifiPeers ? '#15803D' : '#64748B'} /></View>
     <View style={styles.panel}><Text style={styles.panelTitle}>LOCAL NODE</Text><Row label="Node ID" value={nodeId} /><Row label="Role" value="CITIZEN_NODE" /><Row label="Pending messages" value={String(pending)} /><Row label="Cloud sync" value={isOnline ? 'Available for queued items' : 'Waiting for Internet'} /></View>
     <View style={styles.panel}><Text style={styles.panelTitle}>DELIVERY TRUST</Text><Text style={styles.body}>A message is marked relayed, gateway-received, or synced only after the corresponding application event or server acknowledgement. Discovery counts and gateway status are unavailable until the native layer reports them.</Text></View>
   </ScrollView>;

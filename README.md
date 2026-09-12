@@ -134,6 +134,8 @@ Create two Vercel projects from this repository:
 
 Set `VITE_API_URL` in each Vercel project to the deployed backend URL ending in `/api/v1`, for example `https://api.example.com/api/v1`. Do not use `localhost` in Vercel environment variables. Add the variable for Preview and Production, then redeploy after changing it.
 
+The currently deployed Render API is `https://sih-landslide-yuc9.onrender.com/api/v1`. The web clients use it automatically for production builds when `VITE_API_URL` is not set. For a custom frontend hostname, set the backend Render environment variable `CORS_ORIGINS` to its exact comma-separated origin(s), for example `https://portal.example.org,https://admin.example.org`, then redeploy the API.
+
 The backend must be deployed separately because Vercel is hosting the two static Vite frontends. Configure CORS on the backend to allow both Vercel domains.
 
 ### Mobile App

@@ -1,8 +1,10 @@
 import os
 from pydantic import model_validator
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
     PROJECT_NAME: str = "Landslide Early Warning & Risk Monitoring System"
     API_V1_STR: str = "/api/v1"
     # Comma-separated browser origins allowed to call the hosted API. Vercel
@@ -46,9 +48,6 @@ class Settings(BaseSettings):
     SUPABASE_URL: str = os.getenv("SUPABASE_URL", "")
     SUPABASE_PUBLISHABLE_KEY: str = os.getenv("SUPABASE_PUBLISHABLE_KEY", "")
     SUPABASE_SYNC_ENABLED: bool = False
-
-    class Config:
-        env_file = ".env"
 
     @model_validator(mode="after")
     def use_weather_key_when_imd_key_is_unset(self):

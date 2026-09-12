@@ -5,7 +5,8 @@ import Dashboard from './screens/Dashboard';
 import RegionManagement from './screens/RegionManagement';
 import AlertManagement from './screens/AlertManagement';
 import NotificationManagement from './screens/NotificationManagement';
-import { fetchStats, fetchRegions, fetchAlerts, fetchNotifications } from './api';
+import ReportManagement from './screens/ReportManagement';
+import { fetchStats, fetchRegions, fetchAlerts, fetchNotifications, fetchReports } from './api';
 
 export default function App({ token, onLogout }) {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -13,6 +14,7 @@ export default function App({ token, onLogout }) {
   const [regions, setRegions] = useState([]);
   const [alerts, setAlerts] = useState([]);
   const [notifications, setNotifications] = useState([]);
+  const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -48,16 +50,18 @@ export default function App({ token, onLogout }) {
 
   async function loadData() {
     try {
-      const [s, r, a, n] = await Promise.all([
+      const [s, r, a, n, rep] = await Promise.all([
         fetchStats(token),
         fetchRegions(token),
         fetchAlerts(token),
         fetchNotifications(token),
+        fetchReports(token),
       ]);
       setStats(s);
       setRegions(r);
       setAlerts(a);
       setNotifications(n);
+      setReports(rep);
     } catch (err) {
       console.error('Failed to load admin data:', err);
     } finally {
@@ -67,7 +71,12 @@ export default function App({ token, onLogout }) {
 
   return (
     <div className="admin-app">
-      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} onLogout={onLogout} />
+      <Sidebar
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        onLogout={onLogout}
+        reportCount={reports.length}
+      />
       <div className="main-area">
         <TopBar activeTab={activeTab} setActiveTab={setActiveTab} onLogout={onLogout} />
         <div className="content">
@@ -82,6 +91,7 @@ export default function App({ token, onLogout }) {
               regions={regions}
               alerts={alerts}
               notifications={notifications}
+              reports={reports}
               setActiveTab={setActiveTab}
             />
           )}
@@ -95,6 +105,14 @@ export default function App({ token, onLogout }) {
           {activeTab === 'alerts' && (
             <AlertManagement
               alerts={alerts}
+              regions={regions}
+              onRefresh={loadData}
+              token={token}
+            />
+          )}
+          {activeTab === 'reports' && (
+            <ReportManagement
+              reports={reports}
               regions={regions}
               onRefresh={loadData}
               token={token}
