@@ -77,9 +77,15 @@ export async function fetchNotifications(token) {
 
 export async function fetchReports(token) {
   try {
-    const res = await fetch(`${API_BASE}/admin/reports`, {
+    let res = await fetch(`${API_BASE}/admin/reports`, {
       headers: { Authorization: `Bearer ${token}` },
     });
+    if (res.status === 404) {
+      // Fallback for current live Render deployment
+      res = await fetch(`${API_BASE}/reports`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+    }
     if (!res.ok) throw new Error('Reports API returned ' + res.status);
     const data = await res.json();
     if (Array.isArray(data)) {
@@ -88,17 +94,25 @@ export async function fetchReports(token) {
     }
     return [];
   } catch (err) {
+    console.warn('fetchReports error:', err);
     return [];
   }
 }
 
 export async function updateReportStatus(reportId, status, token) {
   try {
-    const res = await fetch(`${API_BASE}/admin/reports/${reportId}`, {
+    let res = await fetch(`${API_BASE}/admin/reports/${reportId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ status }),
     });
+    if (res.status === 404) {
+      res = await fetch(`${API_BASE}/reports/${reportId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ status }),
+      });
+    }
     if (!res.ok) throw new Error('Failed to update report status');
     return await res.json();
   } catch (err) {
@@ -108,10 +122,16 @@ export async function updateReportStatus(reportId, status, token) {
 
 export async function deleteReport(reportId, token) {
   try {
-    const res = await fetch(`${API_BASE}/admin/reports/${reportId}`, {
+    let res = await fetch(`${API_BASE}/admin/reports/${reportId}`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${token}` },
     });
+    if (res.status === 404) {
+      res = await fetch(`${API_BASE}/reports/${reportId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+    }
     if (!res.ok) throw new Error('Failed to delete report');
     return await res.json();
   } catch (err) {
