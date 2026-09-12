@@ -5,6 +5,9 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     PROJECT_NAME: str = "Landslide Early Warning & Risk Monitoring System"
     API_V1_STR: str = "/api/v1"
+    # Comma-separated browser origins allowed to call the hosted API. Vercel
+    # preview/production deployments are additionally permitted in main.py.
+    CORS_ORIGINS: str = os.getenv("CORS_ORIGINS", "")
     
     # Database
     DATABASE_URL: str = "sqlite:///./landslide.db"

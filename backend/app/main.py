@@ -5,6 +5,10 @@ from app.core.config import settings
 from app.api import endpoints
 from app.database import engine, Base, seed_data, migrate_schema, SessionLocal
 
+configured_cors_origins = [
+    origin.strip() for origin in settings.CORS_ORIGINS.split(",") if origin.strip()
+]
+
 Base.metadata.create_all(bind=engine)
 migrate_schema()
 seed_data()
@@ -33,7 +37,12 @@ app.add_middleware(
         "exp://127.0.0.1:8081",
         "exp://10.179.75.155:8081",
         "exp://10.229.128.155:8081",
+        *configured_cors_origins,
     ],
+    # Vercel assigns a distinct *.vercel.app hostname to production and preview
+    # deployments. Keeping this scoped to Vercel avoids opening the API to every
+    # arbitrary browser origin.
+    allow_origin_regex=r"https://[a-z0-9-]+\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
