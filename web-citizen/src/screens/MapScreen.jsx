@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { MapContainer, TileLayer, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, WMSTileLayer, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 
@@ -119,6 +119,14 @@ export default function MapScreen({ regions, selectedRegion, onSelectRegion }) {
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
             eventHandlers={{ tileerror: () => setTileError(true) }}
+          />
+          <WMSTileLayer
+            url="https://bhuvan-vec2.nrsc.gov.in/bhuvan/wms"
+            layers="landslide_susceptibility"
+            format="image/png"
+            transparent={true}
+            version="1.1.1"
+            opacity={0.65}
           />
           <RegionMarkers regions={regions} selectedRegion={selectedRegion} onSelectRegion={onSelectRegion} />
         </MapContainer>

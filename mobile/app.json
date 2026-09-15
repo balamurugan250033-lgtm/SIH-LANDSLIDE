@@ -2,6 +2,7 @@
   "expo": {
     "name": "T-MINUS",
     "slug": "t-minus",
+    "scheme": "landslidesentinel",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",

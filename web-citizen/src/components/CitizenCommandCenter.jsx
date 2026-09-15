@@ -39,18 +39,50 @@ export default function CitizenCommandCenter({ regions = [], alerts = [], notifi
   const [language, setLanguage] = useState('English');
   const [selectedState, setSelectedState] = useState(null);
   const [riskTrend, setRiskTrend] = useState(null);
+
   const stateRegions = selectedState ? regions.filter((region) => regionBelongsToState(region, selectedState)) : regions;
-  const selectedRegion = stateRegions[0];
+  const selectedRegion = selectedState ? null : stateRegions[0] ?? null;
   const highAlerts = alerts.filter((alert) => ['HIGH', 'CRITICAL', 'SEVERE'].includes(alert.severity || alert.risk_level));
   const openRoads = roadStatus.filter((road) => String(road.status).toUpperCase() === 'OPEN').length;
-  const currentAlert = alerts.find((alert) => alert.region_id === selectedRegion?.region_id || alert.region_id === selectedRegion?.id);
-  const currentRisk = useMemo(() => selectedRegion?.risk_score != null ? Math.round(selectedRegion.risk_score * 100) : (currentAlert?.risk_score != null ? Math.round(currentAlert.risk_score * 100) : null), [selectedRegion, currentAlert]);
+
+  const stateIds = new Set(stateRegions.map((region) => region.region_id || region.id));
+  const matchingAlerts = selectedState ? alerts.filter((alert) => stateIds.has(alert.region_id)) : alerts;
+  const currentAlert = matchingAlerts[0] ?? null;
+
+  const stateSummary = useMemo(() => {
+    if (!selectedState || stateRegions.length === 0) return null;
+    return stateRegions.reduce((acc, region) => {
+      acc.count += 1;
+      acc.rainfall += Number(region.rainfall_mm || 0);
+      acc.saturation += Number(region.soil_saturation || 0);
+      acc.slope += Number(region.slope_angle || 0);
+      acc.vibration = acc.vibration || Boolean(region.vibration);
+      acc.riskScoreTotal += Number(region.risk_score || 0);
+      return acc;
+    }, { count: 0, rainfall: 0, saturation: 0, slope: 0, vibration: false, riskScoreTotal: 0 });
+  }, [selectedState, stateRegions]);
+
+  const currentRisk = useMemo(() => {
+    if (selectedState && stateSummary) {
+      const averageRisk = stateSummary.riskScoreTotal / stateSummary.count;
+      return Math.round(Math.min(100, Math.max(0, averageRisk * 100)));
+    }
+    return selectedRegion?.risk_score != null ? Math.round(selectedRegion.risk_score * 100) : (currentAlert?.risk_score != null ? Math.round(currentAlert.risk_score * 100) : null);
+  }, [selectedRegion, currentAlert, selectedState, stateRegions, stateSummary]);
+
   const currentLevel = currentRisk == null ? 'UNAVAILABLE' : (currentAlert?.risk_level || selectedRegion?.risk_level || 'UNAVAILABLE');
+
   useEffect(() => {
     let cancelled = false;
-    fetchCitizenRiskTrend(selectedRegion?.region_id || selectedRegion?.id).then((data) => { if (!cancelled) setRiskTrend(data); }).catch(() => { if (!cancelled) setRiskTrend(null); });
+    if (selectedState) {
+      setRiskTrend(null);
+      return () => { cancelled = true; };
+    }
+    fetchCitizenRiskTrend(selectedRegion?.region_id || selectedRegion?.id)
+      .then((data) => { if (!cancelled) setRiskTrend(data); })
+      .catch(() => { if (!cancelled) setRiskTrend(null); });
     return () => { cancelled = true; };
-  }, [selectedRegion?.region_id, selectedRegion?.id, selectedRegion?.updated_at, selectedRegion?.timestamp]);
+  }, [selectedRegion?.region_id, selectedRegion?.id, selectedRegion?.updated_at, selectedRegion?.timestamp, selectedState]);
   const trendPoints = riskTrend?.points || [];
   const trendPolyline = trendPoints.length ? trendPoints.map((point, index) => `${(index / Math.max(1, trendPoints.length - 1)) * 100},${96 - Number(point.risk_score || 0) * 92}`).join(' ') : '';
   const trendAnalysis = useMemo(() => {
@@ -67,22 +99,22 @@ export default function CitizenCommandCenter({ regions = [], alerts = [], notifi
   const sourceSync = (name) => sourceHealth.find((source) => source.source_name === name)?.last_sync;
   const healthCards = [['LIVE WEATHER & SOIL', 'OPEN_METEO'], ['NER SENSOR NETWORK', 'SENSOR_NETWORK'], ['GIS / TERRAIN DATA', 'GIS'], ['SATELLITE DATA', 'SATELLITE'], ['CITIZEN REPORT NETWORK', 'CITIZEN_REPORTS']];
   const analysis = {
-    location: selectedRegion?.name || (selectedState ? `${selectedState} data unavailable` : 'Select a NER state'),
+    location: selectedRegion?.name || (selectedState ? `${selectedState} (${stateRegions.length} monitored locations)` : 'Select a NER state'),
     confidence: currentAlert?.risk_score ? Math.min(99, Math.round(78 + currentRisk / 8)) : null,
     window: currentRisk == null ? 'Prediction unavailable' : currentLevel === 'LOW' ? 'No elevated risk window' : 'Next 6–12 hours',
     factors: [
-      ['24h Rainfall', `${selectedRegion?.rainfall_mm ?? '--'} mm`, selectedRegion?.rainfall_mm ? Math.min(100, Number(selectedRegion.rainfall_mm) / 1.5) : 0, selectedRegion?.rainfall_mm ? 'LIVE INPUT' : 'DATA UNAVAILABLE'],
-      ['Soil Saturation', `${selectedRegion?.soil_saturation ?? '--'}%`, selectedRegion?.soil_saturation || 0, selectedRegion?.soil_saturation ? 'LIVE INPUT' : 'DATA UNAVAILABLE'],
-      ['Terrain Slope', `${selectedRegion?.slope_angle ?? '--'}°`, selectedRegion?.slope_angle ? Math.min(100, Number(selectedRegion.slope_angle) * 2) : 0, selectedRegion?.slope_angle ? 'LIVE INPUT' : 'DATA UNAVAILABLE'],
-      ['Ground Vibration', selectedRegion?.vibration ? 'Detected' : 'Unavailable', selectedRegion?.vibration ? 72 : 0, selectedRegion?.vibration ? 'LIVE INPUT' : 'DATA UNAVAILABLE'],
+      ['24h Rainfall', selectedState && stateSummary ? `${Math.round(stateSummary.rainfall / Math.max(1, stateSummary.count))} mm` : `${selectedRegion?.rainfall_mm ?? '--'} mm`, selectedState && stateSummary ? Math.min(100, Number(stateSummary.rainfall / Math.max(1, stateSummary.count)) / 1.5) : (selectedRegion?.rainfall_mm ? Math.min(100, Number(selectedRegion.rainfall_mm) / 1.5) : 0), selectedState && stateSummary ? 'LIVE INPUT' : (selectedRegion?.rainfall_mm ? 'LIVE INPUT' : 'DATA UNAVAILABLE')],
+      ['Soil Saturation', selectedState && stateSummary ? `${Math.round(stateSummary.saturation / Math.max(1, stateSummary.count))}%` : `${selectedRegion?.soil_saturation ?? '--'}%`, selectedState && stateSummary ? Math.min(100, Number(stateSummary.saturation / Math.max(1, stateSummary.count))) : (selectedRegion?.soil_saturation || 0), selectedState && stateSummary ? 'LIVE INPUT' : (selectedRegion?.soil_saturation ? 'LIVE INPUT' : 'DATA UNAVAILABLE')],
+      ['Terrain Slope', selectedState && stateSummary ? `${Math.round(stateSummary.slope / Math.max(1, stateSummary.count))}°` : `${selectedRegion?.slope_angle ?? '--'}°`, selectedState && stateSummary ? Math.min(100, Number(stateSummary.slope / Math.max(1, stateSummary.count)) * 2) : (selectedRegion?.slope_angle ? Math.min(100, Number(selectedRegion.slope_angle) * 2) : 0), selectedState && stateSummary ? 'LIVE INPUT' : (selectedRegion?.slope_angle ? 'LIVE INPUT' : 'DATA UNAVAILABLE')],
+      ['Ground Vibration', selectedState && stateSummary ? (stateSummary.vibration ? 'Detected' : 'Unavailable') : (selectedRegion?.vibration ? 'Detected' : 'Unavailable'), selectedState && stateSummary ? (stateSummary.vibration ? 72 : 0) : (selectedRegion?.vibration ? 72 : 0), selectedState && stateSummary ? 'LIVE INPUT' : (selectedRegion?.vibration ? 'LIVE INPUT' : 'DATA UNAVAILABLE')],
       ['Alert history', currentAlert ? 'Active' : 'None', currentAlert ? 76 : 12, currentAlert ? 'HIGH IMPACT' : 'LOW IMPACT'],
     ],
   };
   const explainableFactors = [
-    ['Rainfall', selectedRegion?.rainfall_mm ? Math.min(100, Number(selectedRegion.rainfall_mm) / 1.5) : 0, selectedRegion?.rainfall_mm ? 'OBSERVED' : 'UNAVAILABLE'],
-    ['Soil moisture', selectedRegion?.soil_saturation || 0, selectedRegion?.soil_saturation ? 'OBSERVED' : 'UNAVAILABLE'],
-    ['Slope', selectedRegion?.slope_angle ? Math.min(100, Number(selectedRegion.slope_angle) * 2) : 0, selectedRegion?.slope_angle ? 'OBSERVED' : 'UNAVAILABLE'],
-    ['Vibration', selectedRegion?.vibration ? 72 : 0, selectedRegion?.vibration ? 'OBSERVED' : 'UNAVAILABLE'],
+    ['Rainfall', selectedState && stateSummary ? Math.min(100, Number(stateSummary.rainfall / Math.max(1, stateSummary.count)) / 1.5) : (selectedRegion?.rainfall_mm ? Math.min(100, Number(selectedRegion.rainfall_mm) / 1.5) : 0), selectedState && stateSummary ? 'OBSERVED' : (selectedRegion?.rainfall_mm ? 'OBSERVED' : 'UNAVAILABLE')],
+    ['Soil moisture', selectedState && stateSummary ? Math.min(100, Number(stateSummary.saturation / Math.max(1, stateSummary.count))) : (selectedRegion?.soil_saturation || 0), selectedState && stateSummary ? 'OBSERVED' : (selectedRegion?.soil_saturation ? 'OBSERVED' : 'UNAVAILABLE')],
+    ['Slope', selectedState && stateSummary ? Math.min(100, Number(stateSummary.slope / Math.max(1, stateSummary.count)) * 2) : (selectedRegion?.slope_angle ? Math.min(100, Number(selectedRegion.slope_angle) * 2) : 0), selectedState && stateSummary ? 'OBSERVED' : (selectedRegion?.slope_angle ? 'OBSERVED' : 'UNAVAILABLE')],
+    ['Vibration', selectedState && stateSummary ? (stateSummary.vibration ? 72 : 0) : (selectedRegion?.vibration ? 72 : 0), selectedState && stateSummary ? 'OBSERVED' : (selectedRegion?.vibration ? 'OBSERVED' : 'UNAVAILABLE')],
     ['Alert history', currentAlert ? 76 : 0, currentAlert ? 'OBSERVED' : 'UNAVAILABLE'],
   ];
 

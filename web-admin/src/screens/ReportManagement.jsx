@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { updateReportStatus, deleteReport } from '../api';
-import { CheckCircle2, Clock, XCircle, AlertTriangle, Image as ImageIcon, MapPin, Trash2, Filter } from 'lucide-react';
+import { CheckCircle2, Clock, XCircle, AlertTriangle, Image as ImageIcon, MapPin, Trash2, Filter, Eye } from 'lucide-react';
 
 const STATUS_CONFIG = {
   Submitted: { bg: '#EFF6FF', color: '#2563EB', label: 'New / Submitted', icon: Clock },
@@ -113,7 +113,7 @@ export default function ReportManagement({ reports = [], regions = [], onRefresh
                 <th>Region</th>
                 <th>Hazard Category</th>
                 <th>Description</th>
-                <th>Evidence / Location</th>
+                <th>Evidence Photo</th>
                 <th>Status</th>
                 <th>Timestamp</th>
                 <th style={{ textAlign: 'right' }}>Actions</th>
@@ -125,6 +125,7 @@ export default function ReportManagement({ reports = [], regions = [], onRefresh
                 const statusMeta = STATUS_CONFIG[statusKey] || STATUS_CONFIG['Submitted'];
                 const region = regions.find(r => r.region_id === report.region_id || r.id === report.region_id);
                 const hazards = report.hazard_types?.length ? report.hazard_types : (report.hazard_type ? report.hazard_type.split(', ') : ['General']);
+                const photoSrc = report.photo_url || report.media_path;
 
                 return (
                   <tr key={report.id}>
@@ -157,51 +158,51 @@ export default function ReportManagement({ reports = [], regions = [], onRefresh
                       <div style={{ fontSize: '0.85rem', color: '#1E293B', lineHeight: '1.4' }}>
                         {report.description}
                       </div>
+                      {report.latitude && report.longitude && (
+                        <a
+                          href={`https://www.google.com/maps?q=${report.latitude},${report.longitude}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '3px',
+                            fontSize: '0.72rem',
+                            color: '#64748B',
+                            marginTop: '4px',
+                            textDecoration: 'none',
+                          }}
+                        >
+                          <MapPin size={11} /> {report.latitude.toFixed(4)}, {report.longitude.toFixed(4)}
+                        </a>
+                      )}
                     </td>
                     <td>
-                      <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                        {report.photo_url || report.media_path ? (
-                          <button
-                            onClick={() => setSelectedPhoto(report.photo_url || report.media_path)}
-                            style={{
-                              background: '#EFF6FF',
-                              border: '1px solid #BFDBFE',
-                              color: '#2563EB',
-                              padding: '4px 8px',
-                              borderRadius: '6px',
-                              fontSize: '0.75rem',
-                              cursor: 'pointer',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '4px',
-                            }}
-                          >
-                            <ImageIcon size={13} /> View Photo
-                          </button>
-                        ) : null}
-
-                        {report.latitude && report.longitude ? (
-                          <a
-                            href={`https://www.google.com/maps?q=${report.latitude},${report.longitude}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            style={{
-                              background: '#F8FAFC',
-                              border: '1px solid #E2E8F0',
-                              color: '#64748B',
-                              padding: '4px 8px',
-                              borderRadius: '6px',
-                              fontSize: '0.75rem',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '4px',
-                              textDecoration: 'none',
-                            }}
-                          >
-                            <MapPin size={13} /> GPS
-                          </a>
-                        ) : null}
-                      </div>
+                      {photoSrc ? (
+                        <div
+                          onClick={() => setSelectedPhoto(photoSrc)}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            cursor: 'pointer',
+                            padding: '3px',
+                            border: '1px solid #CBD5E1',
+                            borderRadius: '6px',
+                            background: '#F8FAFC',
+                          }}
+                          title="Click to view full image"
+                        >
+                          <img
+                            src={photoSrc}
+                            alt="Evidence"
+                            style={{ width: 44, height: 44, objectFit: 'cover', borderRadius: '4px' }}
+                          />
+                          <Eye size={14} color="#2563EB" />
+                        </div>
+                      ) : (
+                        <span style={{ color: '#94A3B8', fontSize: '0.75rem' }}>No photo</span>
+                      )}
                     </td>
                     <td>
                       <span
@@ -315,7 +316,7 @@ export default function ReportManagement({ reports = [], regions = [], onRefresh
             left: 0,
             right: 0,
             bottom: 0,
-            backgroundColor: 'rgba(0,0,0,0.7)',
+            backgroundColor: 'rgba(0,0,0,0.75)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -334,15 +335,14 @@ export default function ReportManagement({ reports = [], regions = [], onRefresh
               boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5)',
             }}
           >
-            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid #E2E8F0' }}>
-              <span style={{ fontWeight: 600 }}>Ground Evidence Photo</span>
-              <button onClick={() => setSelectedPhoto(null)} style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: '1.2rem' }}>✕</button>
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid #E2E8F0', alignItems: 'center' }}>
+              <span style={{ fontWeight: 700, fontSize: '0.95rem' }}>Ground Incident Photo Evidence</span>
+              <button onClick={() => setSelectedPhoto(null)} style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: '1.3rem' }}>✕</button>
             </div>
-            <img src={selectedPhoto} alt="Evidence" style={{ maxWidth: '100%', maxHeight: '75vh', objectFit: 'contain', display: 'block' }} />
+            <img src={selectedPhoto} alt="Evidence" style={{ maxWidth: '100%', maxHeight: '75vh', objectFit: 'contain', display: 'block', margin: 'auto' }} />
           </div>
         </div>
       )}
     </div>
   );
 }
-
